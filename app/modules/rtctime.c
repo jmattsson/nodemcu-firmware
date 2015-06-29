@@ -30,17 +30,29 @@ static int rtctime_gettimeofday (lua_State *L)
   return 2;
 }
 
+static void do_sleep_opt (lua_State *L, int idx)
+{
+  if (lua_isnumber (L, idx))
+  {
+    uint32_t opt = lua_tonumber (L, idx);
+    if (opt < 0 || opt > 4)
+      luaL_error (L, "unknown sleep option");
+    deep_sleep_set_option (opt);
+  }
+}
 
-// rtctime.dsleep (sec, usec)
+// rtctime.dsleep (usec, option)
 static int rtctime_dsleep (lua_State *L)
 {
+  uint32_t us = luaL_checknumber (L, 1);
+  do_sleep_opt (L, 2);
   // does not return
-  rtc_time_deep_sleep_us (luaL_checknumber (L, 1), CPU_DEFAULT_MHZ);
+  rtc_time_deep_sleep_us (us, CPU_DEFAULT_MHZ);
   return 0;
 }
 
 
-// rtctime.dsleep_aligned (aligned_sec, aligned_us, min_sec, min_us)
+// rtctime.dsleep_aligned (aligned_usec, min_usec, option)
 static int rtctime_dsleep_aligned (lua_State *L)
 {
   if (!rtc_time_have_time ())
@@ -48,6 +60,7 @@ static int rtctime_dsleep_aligned (lua_State *L)
 
   uint32_t align_us = luaL_checknumber (L, 1);
   uint32_t min_us = luaL_checknumber (L, 2);
+  do_sleep_opt (L, 3);
   // does not return
   rtc_time_deep_sleep_until_aligned (align_us, min_us, CPU_DEFAULT_MHZ);
   return 0;
