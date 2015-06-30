@@ -38,6 +38,8 @@
 #define L16UI_MATCH 0x001002u
 #define L16SI_MATCH 0x009002u
 
+#define LOAD_STORE_COMPLAIN_LOUDLY_ON_ERROR
+#include "c_stdio.h"
 
 void load_non_32_wide_handler (struct exception_frame *ef, uint32_t cause)
 {
@@ -70,6 +72,11 @@ void load_non_32_wide_handler (struct exception_frame *ef, uint32_t cause)
   else
   {
 die:
+#ifdef LOAD_STORE_COMPLAIN_LOUDLY_ON_ERROR
+   while (1)
+     c_printf("\nerror: instruction %x at %x failed on memory access to %x\n",
+       insn, epc1, excvaddr);
+#endif
     /* Turns out we couldn't fix this, trigger a system break instead
      * and hang if the break doesn't get handled. This is effectively
      * what would happen if the default handler was installed. */
