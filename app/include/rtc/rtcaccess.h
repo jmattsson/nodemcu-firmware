@@ -21,17 +21,17 @@ static inline void EARLY_ENTRY_ATTR rtc_mem_write(uint32_t addr, uint32_t val)
   ((uint32_t*)RTC_USER_MEM_BASE)[addr]=val;
 }
 
-static inline uint64_t rtc_make64(uint32_t high, uint32_t low)
+static inline uint64_t EARLY_ENTRY_ATTR rtc_make64(uint32_t high, uint32_t low)
 {
   return (((uint64_t)high)<<32)|low;
 }
 
-static inline uint64_t rtc_mem_read64(uint32_t addr)
+static inline uint64_t EARLY_ENTRY_ATTR rtc_mem_read64(uint32_t addr)
 {
   return rtc_make64(rtc_mem_read(addr+1),rtc_mem_read(addr));
 }
 
-static inline void rtc_mem_write64(uint32_t addr, uint64_t val)
+static inline void EARLY_ENTRY_ATTR rtc_mem_write64(uint32_t addr, uint64_t val)
 {
   rtc_mem_write(addr+1,val>>32);
   rtc_mem_write(addr,val&0xffffffff);

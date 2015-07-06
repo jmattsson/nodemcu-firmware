@@ -248,7 +248,8 @@ static void on_recv (void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_a
 
   tv.tv_sec = dest.sec - NTP_TO_UNIX_EPOCH;
   tv.tv_usec = (MICROSECONDS * dest.frac) / UINT32_MAXI;
-  rtc_time_set_wake_magic ();
+  if (!rtc_time_check_magic ())
+    rtc_time_prepare ();
   rtc_time_settimeofday (&tv);
 
   if (have_cb)

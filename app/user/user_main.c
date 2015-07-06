@@ -153,6 +153,9 @@ void nodemcu_init(void)
 *******************************************************************************/
 void user_init(void)
 {
+#ifdef LUA_USE_MODULES_RTCTIME
+    rtc_time_switch_system ();
+#endif
     // NODE_DBG("SDK version:%s\n", system_get_sdk_version());
     // system_print_meminfo();
     // os_printf("Heap size::%d.\n",system_get_free_heap_size());
