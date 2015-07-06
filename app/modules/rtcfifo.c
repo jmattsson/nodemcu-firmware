@@ -2,6 +2,8 @@
 
 #include "lauxlib.h"
 #include "user_modules.h"
+#include "rtc/rtctime.h"
+#define RTCTIME_SLEEP_ALIGNED rtctime_deep_sleep_until_aligned_us
 #include "rtc/rtcfifo.h"
 
 // rtcfifo.prepare ([{sensor_count=n, interval_us=m, storage_begin=x, storage_end=y}])
@@ -164,7 +166,7 @@ static int rtcfifo_dsleep_until_sample (lua_State *L)
   check_fifo_magic (L);
 
   uint32_t min_us = luaL_checknumber (L, 1);
-  rtc_fifo_deep_sleep_until_sample (min_us, CPU_DEFAULT_MHZ); // no return
+  rtc_fifo_deep_sleep_until_sample (min_us); // no return
   return 0;
 }
 #endif

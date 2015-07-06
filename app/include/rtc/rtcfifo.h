@@ -85,6 +85,10 @@
 #define RTC_DEFAULT_TAGCOUNT    5
 #define RTC_DEFAULT_FIFO_LOC (RTC_DEFAULT_FIFO_START + (RTC_DEFAULT_FIFO_END<<8) + (RTC_DEFAULT_TAGCOUNT<<16))
 
+#ifndef RTCTIME_SLEEP_ALIGNED
+# define RTCTIME_SLEEP_ALIGNED rtc_time_deep_sleep_until_aligned
+#endif
+
 typedef struct
 {
   uint32_t timestamp;
@@ -467,10 +471,10 @@ static inline void rtc_fifo_unset_magic(void)
   rtc_mem_write(RTC_FIFO_MAGIC_POS,0);
 }
 
-static inline void rtc_fifo_deep_sleep_until_sample(uint32_t min_sleep_us, uint32_t mhz)
+static inline void rtc_fifo_deep_sleep_until_sample(uint32_t min_sleep_us)
 {
   uint32_t align=rtc_mem_read(RTC_ALIGNMENT_POS);
-  rtc_time_deep_sleep_until_aligned(align,min_sleep_us,mhz);
+  RTCTIME_SLEEP_ALIGNED(align,min_sleep_us);
 }
 
 static inline void rtc_fifo_prepare(uint32_t samples_per_boot, uint32_t us_per_sample, uint32_t tagcount)
