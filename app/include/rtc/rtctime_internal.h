@@ -97,7 +97,7 @@
  * by switching between various time sources. All state is kept in RAM associated with the RTC, which is
  * maintained across Deep Sleep periods.
  *
- * Internally, time is managed in units of cycles of a (hypothetical) 2040MHz clock, e.g. in units
+ * Internally, time is managed in units of cycles of a (hypothetical) 2080MHz clock, e.g. in units
  * of 0.4807692307ns. The reason for this choice is that this covers both the FRC2 and the cycle
  * counter periods, while running at 52MHz, 80MHz or 160MHz.
  *
@@ -175,7 +175,7 @@
 #define RTC_TIME_MAGIC_FRC2   (RTC_TIME_MAGIC_CCOUNT+1)
 #define RTC_TIME_MAGIC_SLEEP  (RTC_TIME_MAGIC_CCOUNT+2)
 
-#define UNITCYCLE_MHZ     2040
+#define UNITCYCLE_MHZ     2080
 #define CPU_OVERCLOCK_MHZ 160
 #define CPU_DEFAULT_MHZ   80
 #define CPU_BOOTUP_MHZ    52
