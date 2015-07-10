@@ -69,12 +69,8 @@ static int rtcfifo_put (lua_State *L)
 
   sample_t s;
   s.timestamp = luaL_checknumber (L, 1);
-  double val = luaL_checknumber (L, 2);
+  s.value = luaL_checknumber (L, 2);
   s.decimals = luaL_checknumber (L, 3);
-  uint32_t i = s.decimals;
-  while (i--)
-    val *= 10;
-  s.value = val;
   size_t len;
   const char *str = luaL_checklstring (L, 4, &len);
   union {
@@ -92,11 +88,7 @@ static int rtcfifo_put (lua_State *L)
 static int extract_sample (lua_State *L, const sample_t *s)
 {
   lua_pushnumber (L, s->timestamp);
-  double val = s->value;
-  int i;
-  for (i = 0; i < s->decimals; ++i)
-    val /= 10;
-  lua_pushnumber (L, val);
+  lua_pushnumber (L, s->value);
   lua_pushnumber (L, s->decimals);
   union {
     uint32_t u;
