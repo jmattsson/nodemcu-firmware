@@ -45,7 +45,7 @@
 #endif
 
 #define NTP_PORT 123
-#define NTP_ANYCAST_ADDR(dst)  IP4_ADDR(dst, 224, 0, 0, 1)
+#define NTP_ANYCAST_ADDR(dst)  IP4_ADDR(dst, 224, 0, 1, 1)
 
 #define MAX_ATTEMPTS 5
 
