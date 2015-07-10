@@ -344,7 +344,8 @@ static int32_t rtc_fifo_delta_t(uint32_t t, uint32_t ref_t)
 
 static uint32_t rtc_fifo_construct_entry(uint32_t val, uint32_t tagindex, uint32_t decimals, uint32_t deltat)
 {
-  return val+(deltat<<16)+(decimals<<25)+(tagindex<<28);
+  return (val & 0xffff) + ((deltat & 0x1ff) <<16) +
+         ((decimals & 0x7)<<25) + ((tagindex & 0xf)<<28);
 }
 
 static inline void rtc_fifo_store_sample(const sample_t* s)
