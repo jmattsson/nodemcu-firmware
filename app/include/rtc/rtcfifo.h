@@ -55,7 +55,7 @@
 // (9/10) are meaningless when (3) is zero
 //
 
-#define RTC_FIFO_BASE          8
+#define RTC_FIFO_BASE          10
 #define RTC_FIFO_MAGIC         0x44695553
 
 // RTCFIFO storage
