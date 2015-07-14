@@ -1141,6 +1141,12 @@ static const LUA_REG_TYPE wifi_ap_map[] =
   { LNILKEY, LNILVAL }
 };
 
+static int wifi_chan (lua_State *L)
+{
+  lua_pushinteger (L, wifi_get_channel ());
+  return 1;
+}
+
 const LUA_REG_TYPE wifi_map[] = 
 {
   { LSTRKEY( "setmode" ), LFUNCVAL( wifi_setmode ) },
@@ -1151,6 +1157,7 @@ const LUA_REG_TYPE wifi_map[] =
   { LSTRKEY( "startsmart" ), LFUNCVAL( wifi_start_smart ) },
   { LSTRKEY( "stopsmart" ), LFUNCVAL( wifi_exit_smart ) },
   { LSTRKEY( "sleeptype" ), LFUNCVAL( wifi_sleeptype ) },
+  { LSTRKEY("channel"), LFUNCVAL(wifi_chan)},
 #if LUA_OPTIMIZE_MEMORY > 0
   { LSTRKEY( "sta" ), LROVAL( wifi_station_map ) },
   { LSTRKEY( "ap" ), LROVAL( wifi_ap_map ) },
@@ -1236,4 +1243,38 @@ LUALIB_API int luaopen_wifi( lua_State *L )
 
   return 1;
 #endif // #if LUA_OPTIMIZE_MEMORY > 0  
+}
+
+
+/**
+ * Horrible horrible workaround to (hopefully) detect when the beacon
+ * timer breaks, and to force it back into sanity. Needed for  0.9.5,
+ * should not be needed for 1.1.2 once that's available.
+ */
+#include <ets_sys.h>
+void __wrap_timer_insert(uint32_t when, ETSTimer *t)
+{
+  uint32_t now = NOW();
+  int32_t diff = (int32_t)(when - now);
+  static void *beacon_tmr = 0;
+  static uint32_t beacon_ival = 0;
+  if (diff > 0x4FFE0000 && !beacon_tmr)
+  {
+    c_printf("Detected broken AP beacon timer, activating workaround!\n");
+    beacon_tmr = t->timer_func;
+    struct softap_config apc;
+    if (wifi_softap_get_config (&apc))
+      beacon_ival = (apc.beacon_interval * 31250u) / 100;
+    else
+    {
+      c_printf("Failed to read beacon interval, defaulting to 100ms\n");
+      beacon_ival = 31250;
+    }
+  }
+  if ((t->timer_func == beacon_tmr) && diff > beacon_ival)
+    when = now + beacon_ival;
+  else if (diff < 0)
+    when = now;
+
+  __real_timer_insert(when, t);
 }

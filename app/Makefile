@@ -99,7 +99,8 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-nostdlib 				\
     -T$(LD_FILE) 				\
 	-Wl,--no-check-sections 		\
-	-Wl,--wrap=_xtos_set_exception_handler \
+	-Wl,--wrap=_xtos_set_exception_handler	\
+	-Wl,--wrap=timer_insert			\
 	-Wl,-static 				\
 	-Wl,--start-group 			\
 	-lc 					\
