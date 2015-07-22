@@ -221,6 +221,14 @@
 #define ROM_MODULES_INTELLIGENTLI
 #endif
 
+#if defined(LUA_USE_MODULES_S4PP)
+#define MODULES_S4PP "s4pp"
+#define ROM_MODULES_S4PP   \
+    _ROM(MODULES_S4PP, luaopen_s4pp, s4pp_map)
+#else
+#define ROM_MODULES_S4PP
+#endif
+
 #define LUA_MODULES_ROM     \
         ROM_MODULES_GPIO    \
         ROM_MODULES_PWM		\
@@ -249,5 +257,6 @@
         ROM_MODULES_RTCFIFO \
         ROM_MODULES_SNTP    \
         ROM_MODULES_INTELLIGENTLI  \
+        ROM_MODULES_S4PP \
 
 #endif
