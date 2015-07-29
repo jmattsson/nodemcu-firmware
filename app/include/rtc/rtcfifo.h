@@ -41,7 +41,7 @@
 //    deep sleep.
 
 // 3: Number of samples to take before doing a "real" boot. Decremented as samples are obtained
-// 4: Reload value for (10). Needs to be applied by the firmware in the real boot (rtc_restart_samples_to_take())
+// 4: Reload value for (3). Needs to be applied by the firmware in the real boot (rtc_restart_samples_to_take())
 //
 // 5: FIFO location. First FIFO address in bits 0:7, first non-FIFO address in bits 8:15.
 //                   Number of tag spaces in bits 16:23
@@ -52,7 +52,7 @@
 //    most recent sample pulled off; I.e. the head samples timestamp is this plus that sample's delta_t
 // 10: FIFO tail timestamp. Used and maintained when adding things to the FIFO. This is the timestamp of the
 //    most recent sample to have been added. I.e. a new sample's delta-t is calculated relative to this
-// (9/10) are meaningless when (3) is zero
+// (9/10) are meaningless when (6) is zero
 //
 
 #define RTC_FIFO_BASE          10
