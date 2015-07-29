@@ -171,6 +171,11 @@ static inline uint32_t rtc_fifo_get_first(void)
   return rtc_fifo_get_tagpos()+rtc_fifo_get_tagcount();
 }
 
+static inline uint32_t rtc_fifo_get_size(void)
+{
+  return rtc_fifo_get_last()-rtc_fifo_get_first();
+}
+
 static inline void rtc_fifo_put_loc(uint32_t first, uint32_t last, uint32_t tagcount)
 {
   rtc_mem_write(RTC_FIFOLOC_POS,first+(last<<8)+(tagcount<<16));
