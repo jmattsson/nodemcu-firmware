@@ -608,7 +608,7 @@ if __name__ == '__main__':
         e = ELFFile(args.input)
         image = ESPFirmwareImage()
         image.entrypoint = e.get_entry_point()
-        for section, start in ((".text", "_text_start"), (".data", "_data_start"), (".rodata", "_rodata_start")):
+        for section, start in ( (".data", "_data_start"), (".text", "_text_start"), (".rodata", "_rodata_start")):
             data = e.load_section(section)
             image.add_segment(e.get_symbol_addr(start), data)
 
