@@ -28,7 +28,11 @@ static int adc_readvdd33( lua_State* L )
   if(STATION_MODE == wifi_get_opmode())
   {
     // Bug fix
-	  if (wifi_station_get_connect_status()!=0)
+        int override=0;
+        if (lua_isnumber (L, 1))
+           override = lua_tonumber (L, 1);
+
+        if (wifi_station_get_connect_status()!=0 && !override)
 	  {
         return luaL_error( L, "Can't read vdd33 while station is connected" );
 	  }
