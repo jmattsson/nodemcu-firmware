@@ -6,11 +6,12 @@
 #define RTCTIME_SLEEP_ALIGNED rtctime_deep_sleep_until_aligned_us
 #include "rtc/rtcfifo.h"
 
-// rtcfifo.prepare ([{sensor_count=n, interval_us=m, storage_begin=x, storage_end=y}])
+// rtcfifo.prepare ([{sensor_count=n, interval_us=m, samples_per=p storage_begin=x, storage_end=y}])
 static int rtcfifo_prepare (lua_State *L)
 {
   uint32_t sensor_count = RTC_DEFAULT_TAGCOUNT;
   uint32_t interval_us = 0;
+  uint32_t samples_per_boot=0;
   int first = -1, last = -1;
 
   if (lua_istable (L, 1))
@@ -19,6 +20,11 @@ static int rtcfifo_prepare (lua_State *L)
     lua_getfield (L, 1, "interval_us");
     if (lua_isnumber (L, -1))
       interval_us = lua_tonumber (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 1, "samples_per");
+    if (lua_isnumber (L, -1))
+      samples_per_boot = lua_tonumber (L, -1);
     lua_pop (L, 1);
 #endif
 
@@ -39,7 +45,7 @@ static int rtcfifo_prepare (lua_State *L)
   else if (!lua_isnone (L, 1))
     return luaL_error (L, "expected table as arg #1");
 
-  rtc_fifo_prepare (0, interval_us, sensor_count);
+  rtc_fifo_prepare (samples_per_boot, interval_us, sensor_count);
 
   if (first != -1 && last != -1)
     rtc_fifo_put_loc (first, last, sensor_count);
@@ -130,6 +136,21 @@ static int rtcfifo_peek (lua_State *L)
     return extract_sample (L, &s);
 }
 
+static int rtcfifo_request_samples (lua_State *L)
+{
+  check_fifo_magic (L);
+
+  if (lua_isnumber (L, 1))
+  {
+    uint32_t count = lua_tonumber (L, 1);
+    rtc_put_samples_to_take(count);
+  }
+  else
+  {
+    rtc_restart_samples_to_take();
+  }
+}
+
 
 // rtcfifo.drop (num)
 static int rtcfifo_drop (lua_State *L)
@@ -147,6 +168,15 @@ static int rtcfifo_count (lua_State *L)
   check_fifo_magic (L);
 
   lua_pushnumber (L, rtc_fifo_get_count ());
+  return 1;
+}
+
+// num = rtcfifo.size ()
+static int rtcfifo_size (lua_State *L)
+{
+  check_fifo_magic (L);
+
+  lua_pushnumber (L, rtc_fifo_get_size ());
   return 1;
 }
 
@@ -175,9 +205,11 @@ const LUA_REG_TYPE rtcfifo_map[] =
   { LSTRKEY("peek"),                LFUNCVAL(rtcfifo_peek) },
   { LSTRKEY("drop"),                LFUNCVAL(rtcfifo_drop) },
   { LSTRKEY("count"),               LFUNCVAL(rtcfifo_count) },
+  { LSTRKEY("size"),                LFUNCVAL(rtcfifo_size) },
 #ifdef LUA_USE_MODULES_RTCTIME
   { LSTRKEY("dsleep_until_sample"), LFUNCVAL(rtcfifo_dsleep_until_sample) },
 #endif
+  { LSTRKEY("request_samples"),     LFUNCVAL(rtcfifo_request_samples) },
   { LNILKEY, LNILVAL }
 };
 
