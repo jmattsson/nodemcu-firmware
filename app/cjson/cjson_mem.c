@@ -1,4 +1,4 @@
-#include "luamem.h"
+#include "cjson_mem.h"
 #include "../lua/lauxlib.h"
 #include <c_stdlib.h>
 
@@ -10,7 +10,7 @@ void cjson_mem_setlua (lua_State *L)
   gL = L;
 }
 
-void *cjson_lua_malloc (uint32_t sz)
+void *cjson_mem_malloc (uint32_t sz)
 {
   void *p = (void*)c_malloc (sz);
   if (!p && gL)
@@ -19,7 +19,7 @@ void *cjson_lua_malloc (uint32_t sz)
 }
 
 
-void *cjson_lua_realloc (void *o, uint32_t sz)
+void *cjson_mem_realloc (void *o, uint32_t sz)
 {
   void *p = (void*)c_realloc (o, sz);
   if (!p && gL)

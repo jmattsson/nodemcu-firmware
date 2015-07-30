@@ -1,5 +1,5 @@
-#ifndef _CJSON_LUA_MEM_H_
-#define _CJSON_LUA_MEM_H_
+#ifndef _CJSON_MEM_H_
+#define _CJSON_MEM_H_
 
 #include "../lua/lua.h"
 

@@ -45,7 +45,7 @@
 #include "flash_api.h"
 
 #include "strbuf.h"
-#include "luamem.h"
+#include "cjson_mem.h"
 
 #define FPCONV_G_FMT_BUFSIZE   32
 #define fpconv_strtod c_strtod
