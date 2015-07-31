@@ -61,6 +61,8 @@ typedef uint8_t u8_t;
 #ifndef  SPIFFS_CACHE_STATS
 #define SPIFFS_CACHE_STATS              0
 #endif
+#else
+#define SPIFFS_CACHE_WR                 0
 #endif
 
 // Always check header of each accessed page to ensure consistent state.
