@@ -8,16 +8,10 @@
 #ifndef SPIFFS_CONFIG_H_
 #define SPIFFS_CONFIG_H_
 
-// ----------- 8< ------------
-// Following includes are for the linux test build of spiffs
-// These may/should/must be removed/altered/replaced in your target
-// #include "params_test.h"
+#include "user_config.h"
 #include "c_stdio.h"
-#include "c_stdlib.h"
+#include "c_stdint.h"
 #include "c_string.h"
-#include "c_stddef.h"
-#include "c_types.h"
-// ----------- >8 ------------
 
 typedef sint32_t s32_t;
 typedef uint32_t u32_t;

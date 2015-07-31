@@ -8,7 +8,6 @@ spiffs fs;
   
 static u8_t spiffs_work_buf[LOG_PAGE_SIZE*2];
 static u8_t spiffs_fds[32*4];
-static u8_t spiffs_cache[(LOG_PAGE_SIZE+32)*4];
 
 static s32_t my_spiffs_read(u32_t addr, u32_t size, u8_t *dst) {
   platform_flash_read(dst, addr, size);
@@ -66,8 +65,7 @@ void myspiffs_mount() {
     spiffs_work_buf,
     spiffs_fds,
     sizeof(spiffs_fds),
-    spiffs_cache,
-    sizeof(spiffs_cache),
+    0, 0,
     // myspiffs_check_callback);
     0);
   NODE_DBG("mount res: %i\n", res);
