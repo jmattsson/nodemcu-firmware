@@ -11,12 +11,12 @@
 
 static inline uint32_t rtc_mem_read(uint32_t addr)
 {
-  return ((uint32_t*)RTC_USER_MEM_BASE)[addr];
+  return ((volatile uint32_t*)RTC_USER_MEM_BASE)[addr];
 }
 
 static inline void rtc_mem_write(uint32_t addr, uint32_t val)
 {
-  ((uint32_t*)RTC_USER_MEM_BASE)[addr]=val;
+  ((volatile uint32_t*)RTC_USER_MEM_BASE)[addr]=val;
 }
 
 static inline uint64_t rtc_make64(uint32_t high, uint32_t low)
@@ -42,8 +42,8 @@ static inline void rtc_memw(void)
 
 static inline void rtc_reg_write(uint32_t addr, uint32_t val)
 {
-  rtc_memw();
   addr+=RTC_MMIO_BASE;
+  rtc_memw();
   *((volatile uint32_t*)addr)=val;
   rtc_memw();
 }
