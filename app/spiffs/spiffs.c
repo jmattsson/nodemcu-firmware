@@ -53,7 +53,11 @@ void myspiffs_mount() {
 #endif
   cfg.phys_addr += 0x3000;
   cfg.phys_addr &= 0xFFFFC000;  // align to 4 sector.
+#ifdef SPIFFS_FIXED_SIZE
+  cfg.phys_size = SPIFFS_FIXED_SIZE;
+#else
   cfg.phys_size = INTERNAL_FLASH_SIZE - ( ( u32_t )cfg.phys_addr - INTERNAL_FLASH_START_ADDRESS );
+#endif
   cfg.phys_erase_block = INTERNAL_FLASH_SECTOR_SIZE; // according to datasheet
   cfg.log_block_size = INTERNAL_FLASH_SECTOR_SIZE; // let us not complicate things
   cfg.log_page_size = LOG_PAGE_SIZE; // as we said
@@ -96,8 +100,12 @@ int myspiffs_format( void )
 #endif
   sect_first += 0x3000;
   sect_first &= 0xFFFFC000;  // align to 4 sector.
-  sect_first = platform_flash_get_sector_of_address(sect_first);
+#ifdef SPIFFS_FIXED_SIZE
+  sect_last = sect_first + SPIFFS_FIXED_SIZE - 4;
+#else
   sect_last = INTERNAL_FLASH_SIZE + INTERNAL_FLASH_START_ADDRESS - 4;
+#endif
+  sect_first = platform_flash_get_sector_of_address(sect_first);
   sect_last = platform_flash_get_sector_of_address(sect_last);
   NODE_DBG("sect_first: %x, sect_last: %x\n", sect_first, sect_last);
   while( sect_first <= sect_last )
