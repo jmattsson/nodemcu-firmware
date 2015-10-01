@@ -9,7 +9,7 @@ LOCAL os_timer_t readline_timer;
 // UartDev is defined and initialized in rom code.
 extern UartDevice UartDev;
 
-#define uart_putc uart0_putc
+#define uart_putc uart0_write_char
 
 bool uart_getc(char *c){
     RcvMsgBuff *pRxBuff = &(UartDev.rcv_buff);
@@ -19,7 +19,7 @@ bool uart_getc(char *c){
     // ETS_UART_INTR_DISABLE();
     ETS_INTR_LOCK();
     *c = (char)*(pRxBuff->pReadPos);
-    if (pRxBuff->pReadPos == (pRxBuff->pRcvMsgBuff + RX_BUFF_SIZE)) {
+    if (pRxBuff->pReadPos == (pRxBuff->pRcvMsgBuff + pRxBuff->RcvBuffSize)) {
         pRxBuff->pReadPos = pRxBuff->pRcvMsgBuff ; 
     } else {
         pRxBuff->pReadPos++;
