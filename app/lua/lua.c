@@ -587,7 +587,7 @@ void update_key_led(){
 #endif
 
 #ifndef uart_putc
-#define uart_putc uart0_write_char
+#define uart_putc uart0_putc
 #endif
 extern bool uart_on_data_cb(const char *buf, size_t len);
 extern bool uart0_echo;
