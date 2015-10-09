@@ -24,12 +24,12 @@ SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS= 					\
 	user 					\
 	driver 					\
-	lwip 					\
 	json 					\
 	upgrade 				\
 	platform 				\
 	libc 					\
 	lua 					\
+	lwip 					\
 	coap 					\
 	mqtt 					\
 	u8glib 					\
@@ -39,7 +39,8 @@ SUBDIRS= 					\
 	spiffs 					\
 	cjson 					\
 	crypto 					\
-	dhtlib
+	dhtlib					\
+	tsl2561
 
 endif # } PDIR
 
@@ -62,25 +63,17 @@ ifeq ($(FLAVOR),release)
     TARGET_LDFLAGS += -Os
 endif
 
-LD_FILE = $(LDDIR)/eagle.app.v6.ld
-
-ifeq ($(APP), 1)
-	LD_FILE = $(LDDIR)/eagle.app.v6.app1.ld
-endif
-
-ifeq ($(APP), 2)
-	LD_FILE = $(LDDIR)/eagle.app.v6.app2.ld
-endif
+LD_FILE = $(LDDIR)/nodemcu.ld
 
 COMPONENTS_eagle.app.v6 = 			\
 	user/libuser.a 				\
 	driver/libdriver.a 			\
-	lwip/liblwip.a 				\
 	json/libjson.a 				\
 	upgrade/libupgrade.a 			\
 	platform/libplatform.a 			\
 	libc/liblibc.a 				\
 	lua/liblua.a 				\
+	lwip/liblwip.a 				\
 	coap/coap.a 				\
 	mqtt/mqtt.a 				\
 	u8glib/u8glib.a 			\
@@ -90,17 +83,18 @@ COMPONENTS_eagle.app.v6 = 			\
 	cjson/libcjson.a 			\
 	crypto/libcrypto.a 			\
 	dhtlib/libdhtlib.a 			\
-	modules/libmodules.a
+	tsl2561/tsl2561lib.a			\
+	modules/libmodules.a		
+
 
 LINKFLAGS_eagle.app.v6 = 			\
-	-L../lib 				\
 	-Wl,--gc-sections 			\
-	-Xlinker -Map=mapfile 			\
+	-Wl,-Map=mapfile 			\
 	-nostdlib 				\
-    -T$(LD_FILE) 				\
+	-T$(LD_FILE) 				\
+	-Wl,@../ld/defsym.rom			\
 	-Wl,--no-check-sections 		\
 	-Wl,--wrap=_xtos_set_exception_handler	\
-	-Wl,--wrap=timer_insert			\
 	-Wl,-static 				\
 	-Wl,--start-group 			\
 	-lc 					\
@@ -120,7 +114,7 @@ LINKFLAGS_eagle.app.v6 = 			\
 
 DEPENDS_eagle.app.v6 = 				\
                 $(LD_FILE) 			\
-                $(LDDIR)/eagle.rom.addr.v6.ld
+		Makefile
 
 #############################################################
 # Configuration i.e. compile options etc.

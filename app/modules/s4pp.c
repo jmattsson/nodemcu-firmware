@@ -1,6 +1,10 @@
 #include "lua.h"
 #include "lauxlib.h"
-#include "ssl/ssl_ssl.h"
+#ifdef LWIP_OPEN_SRC
+#include "lwip/ip_addr.h"
+#else
+#include "ip_addr.h"
+#endif
 #include "espconn.h"
 #include "../crypto/sha2.h"
 #include "../crypto/digests.h"
@@ -318,7 +322,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
   // deal with left-over pieces
   if (len)
   {
-    sud->recv_buf = os_malloc (len);
+    sud->recv_buf = (char *)mem_malloc (len);
     if (!sud->recv_buf)
       goto_err_with_msg (sud->L, "no memory for recv buffer");
     sud->recv_len = len;

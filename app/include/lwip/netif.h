@@ -169,6 +169,8 @@ struct netif {
 #if LWIP_DHCP
   /** the DHCP client state information for this netif */
   struct dhcp *dhcp;
+  struct udp_pcb *dhcps_pcb;	//dhcps
+  void *pad;
 #endif /* LWIP_DHCP */
 #if LWIP_AUTOIP
   /** the AutoIP client state information for this netif */

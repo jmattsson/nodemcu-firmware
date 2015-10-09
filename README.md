@@ -81,13 +81,13 @@ tools/esptool.py supported NodeMCU devkit automatic flash.
     <th scope="col">IO index</th><th scope="col">ESP8266 pin</th><th scope="col">IO index</th><th scope="col">ESP8266 pin</th>
   </tr>
   <tr>
-    <td>0 [*]</td><td>GPIO16</td><td>8</td><td>GPIO15</td>
+    <td>0 [*]</td><td>GPIO16</td><td>8</td><td>GPIO15 (SPI CS)</td>
   </tr>
   <tr>
-    <td>1</td><td>GPIO5</td><td>9</td><td>GPIO3</td>
+    <td>1</td><td>GPIO5</td><td>9</td><td>GPIO3 (UART RX)</td>
    </tr>
    <tr>
-    <td>2</td><td>GPIO4</td><td>10</td><td>GPIO1</td>
+    <td>2</td><td>GPIO4</td><td>10</td><td>GPIO1 (UART TX)</td>
   </tr>
   <tr>
     <td>3</td><td>GPIO0</td><td>11</td><td>GPIO9</td>
@@ -96,13 +96,13 @@ tools/esptool.py supported NodeMCU devkit automatic flash.
     <td>4</td><td>GPIO2</td><td>12</td><td>GPIO10</td>
   </tr>
   <tr>
-    <td>5</td><td>GPIO14</td><td></td><td></td>
+    <td>5</td><td>GPIO14 (SPI CLK)</td><td></td><td></td>
    </tr>
    <tr>
-    <td>6</td><td>GPIO12</td><td></td><td></td>
+    <td>6</td><td>GPIO12 (SPI MISO)</td><td></td><td></td>
   </tr>
   <tr>
-    <td>7</td><td>GPIO13</td><td></td><td></td>
+    <td>7</td><td>GPIO13 (SPI MOSI)</td><td></td><td></td>
    </tr>
 </table>
 #### [*] D0(GPIO16) can only be used as gpio read/write. no interrupt supported. no pwm/i2c/ow supported.
@@ -360,8 +360,27 @@ cu:send("hello")
 ```
 
 ####Operate a display with u8glib
-u8glib is a graphics library with support for many different displays.
-The integration in nodemcu is developed for SSD1306 based display attached via the I2C port. Further display types and SPI connectivity will be added in the future.
+u8glib is a graphics library with support for many different displays. The nodemcu firmware supports a subset of these.
+Both I2C and SPI:
+* sh1106_128x64
+* ssd1306 - 128x64 and 64x48 variants
+* ssd1309_128x64
+* ssd1327_96x96_gr
+* uc1611 - dogm240 and dogxl240 variants
+
+SPI only:
+* ld7032_60x32
+* pcd8544_84x48
+* pcf8812_96x65
+* ssd1322_nhd31oled - bw and gr variants
+* ssd1325_nhd27oled - bw and gr variants
+* ssd1351_128x128 - gh and hicolor variants
+* st7565_64128n - variants 64128n, dogm128/132, lm6059/lm6063, c12832/c12864
+* uc1601_c128032
+* uc1608 - 240x128 and 240x64 variants
+* uc1610_dogxl160 - bw and gr variants
+* uc1611 - dogm240 and dogxl240 variants
+* uc1701 - dogs102 and mini12864 variants
 
 U8glib v1.18.1
 
@@ -485,8 +504,10 @@ cc:post(coap.NON, "coap://192.168.18.100:5683/", "Hello")
 ```
 
 ####cjson
-
 ```lua
+-- Note that when cjson deal with large content, it may fails a memory allocation, and leaks a bit of memory.
+-- so it's better to detect that and schedule a restart. 
+--
 -- Translate Lua value to/from JSON
 -- text = cjson.encode(value)
 -- value = cjson.decode(text)

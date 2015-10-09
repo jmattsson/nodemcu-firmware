@@ -30,9 +30,17 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "auxmods.h"
-#include "ssl/ssl_ssl.h"
+#ifdef LWIP_OPEN_SRC
+#include "lwip/ip_addr.h"
+#else
+#include "ip_addr.h"
+#endif
 #include "espconn.h"
 #include "../crypto/digests.h"
+
+#ifndef RT_MAX_PLAIN_LENGTH
+#define RT_MAX_PLAIN_LENGTH 4096
+#endif
 
 #define MAX_ERROR_BODY 256
 
