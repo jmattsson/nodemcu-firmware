@@ -29,6 +29,7 @@ SUBDIRS= 					\
 	platform 				\
 	libc 					\
 	lua 					\
+	lwip 					\
 	coap 					\
 	mqtt 					\
 	u8glib 					\
@@ -40,8 +41,6 @@ SUBDIRS= 					\
 	crypto 					\
 	dhtlib					\
 	tsl2561
-
-	#lwip 					\
 
 endif # } PDIR
 
@@ -74,6 +73,7 @@ COMPONENTS_eagle.app.v6 = 			\
 	platform/libplatform.a 			\
 	libc/liblibc.a 				\
 	lua/liblua.a 				\
+	lwip/liblwip.a 				\
 	coap/coap.a 				\
 	mqtt/mqtt.a 				\
 	u8glib/u8glib.a 			\
@@ -86,7 +86,6 @@ COMPONENTS_eagle.app.v6 = 			\
 	tsl2561/tsl2561lib.a			\
 	modules/libmodules.a		
 
-	#lwip/liblwip.a 				\
 
 LINKFLAGS_eagle.app.v6 = 			\
 	-Wl,--gc-sections 			\
@@ -109,7 +108,6 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-ljson 					\
 	-lsmartconfig 				\
 	-lssl 					\
-	-llwip					\
 	$(DEP_LIBS_eagle.app.v6) 		\
 	-Wl,--end-group 			\
 	-lm
@@ -133,11 +131,10 @@ DEPENDS_eagle.app.v6 = 				\
 #	-DTXRX_RXBUF_DEBUG
 #	-DWLAN_CONFIG_CCX
 CONFIGURATION_DEFINES =	-D__ets__ 		\
-
-#			-DICACHE_FLASH 		\
-#			-DLWIP_OPEN_SRC 	\
-#			-DPBUF_RSV_FOR_WLAN 	\
-#			-DEBUF_LWIP
+			-DICACHE_FLASH 		\
+			-DLWIP_OPEN_SRC 	\
+			-DPBUF_RSV_FOR_WLAN 	\
+			-DEBUF_LWIP
 
 DEFINES += 					\
 	$(UNIVERSAL_TARGET_DEFINES) 		\
