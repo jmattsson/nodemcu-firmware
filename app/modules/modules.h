@@ -205,6 +205,30 @@
 #define ROM_MODULES_RTCFIFO
 #endif
 
+#if defined(LUA_USE_MODULES_FLASHFIFO)
+#define MODULES_FLASHFIFO      "flashfifo"
+#define ROM_MODULES_FLASHFIFO  \
+    _ROM(MODULES_FLASHFIFO, luaopen_flashfifo, flashfifo_map)
+#else
+#define ROM_MODULES_FLASHFIFO
+#endif
+
+#if defined(LUA_USE_MODULES_DIUSFIFO)
+#define MODULES_DIUSFIFO      "diusfifo"
+#define ROM_MODULES_DIUSFIFO  \
+    _ROM(MODULES_DIUSFIFO, luaopen_diusfifo, diusfifo_map)
+#else
+#define ROM_MODULES_DIUSFIFO
+#endif
+
+#if defined(LUA_USE_MODULES_RTCSAMPLER)
+#define MODULES_RTCSAMPLER      "rtcsampler"
+#define ROM_MODULES_RTCSAMPLER  \
+    _ROM(MODULES_RTCSAMPLER, luaopen_rtcsampler, rtcsampler_map)
+#else
+#define ROM_MODULES_RTCSAMPLER
+#endif
+
 #if defined(LUA_USE_MODULES_SNTP)
 #define MODULES_SNTP      "sntp"
 #define ROM_MODULES_SNTP  \
@@ -271,6 +295,9 @@
         ROM_MODULES_RTCMEM  \
         ROM_MODULES_RTCTIME \
         ROM_MODULES_RTCFIFO \
+        ROM_MODULES_FLASHFIFO \
+        ROM_MODULES_DIUSFIFO \
+        ROM_MODULES_RTCSAMPLER \
         ROM_MODULES_SNTP    \
         ROM_MODULES_INTELLIGENTLI  \
         ROM_MODULES_S4PP \

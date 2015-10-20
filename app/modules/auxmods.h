@@ -91,6 +91,18 @@ LUALIB_API int ( luaopen_rc )( lua_State *L );
 #define AUXLIB_DHT      "dht"
 LUALIB_API int ( luaopen_dht )( lua_State *L );
 
+#define AUXLIB_RTCFIFO  "rtcfifo"
+LUALIB_API int ( luaopen_rtcfifo )( lua_State *L );
+
+#define AUXLIB_FLASHFIFO "flashfifo"
+LUALIB_API int ( luaopen_flashfifo )( lua_State *L );
+
+#define AUXLIB_DIUSFIFO  "diusfifo"
+LUALIB_API int ( luaopen_diusfifo )( lua_State *L );
+
+#define AUXLIB_RTCSAMPLER "rtcsampler"
+LUALIB_API int ( luaopen_rtcsampler )( lua_State *L );
+
 // Helper macros
 #define MOD_CHECK_ID( mod, id )\
   if( !platform_ ## mod ## _exists( id ) )\

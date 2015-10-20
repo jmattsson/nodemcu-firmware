@@ -24,6 +24,7 @@
 #define RTC_SAMPLESPERBOOT_POS (RTC_SAMPLER_BASE+4)
 
 #include "rtctime.h"
+#include "rtcaccess.h"
 
 #define INTERNAL // Just for keeping track
 #define API      // ditto
