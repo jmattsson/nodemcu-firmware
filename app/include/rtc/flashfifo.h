@@ -159,8 +159,12 @@ typedef struct
 typedef uint32_t data_sector_t; // These are relative to flash_fifo_t->data
 
 #define ESP8266_SECTOR_SIZE SPI_FLASH_SEC_SIZE
+#ifndef ESP8266_FLASH_FIFO_START
 #define ESP8266_FLASH_FIFO_START 0xa0000
+#endif
+#ifndef ESP8266_FLASH_FIFO_SIZE
 #define ESP8266_FLASH_FIFO_SIZE  0x40000
+#endif
 
 #ifdef UNIT_TEST
 #define FAKE_FLASH
