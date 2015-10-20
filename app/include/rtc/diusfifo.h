@@ -7,7 +7,7 @@
 // into flash fifo when the rtc fifo overflows.
 //
 #ifndef DIUS_FIFO_USE_RTC_MEM
-#define DIUS_FIFO_USE_RTC_MEM 0
+#define DIUS_FIFO_USE_RTC_MEM 1
 #endif
 
 #ifndef DIUS_FIFO_USE_RTC_SAMPLER
