@@ -38,8 +38,8 @@
 #define LUA_USE_MODULES_RTCMEM
 #define LUA_USE_MODULES_RTCTIME
 #define LUA_USE_MODULES_RTCFIFO
-#define LUA_USE_MODULES_FLASHFIFO
-#define LUA_USE_MODULES_DIUSFIFO
+// #define LUA_USE_MODULES_FLASHFIFO // Note: These use a fixed flash area. Configure appropriately
+// #define LUA_USE_MODULES_DIUSFIFO  //       if you are going to use them!
 #define LUA_USE_MODULES_RTCSAMPLER
 #define LUA_USE_MODULES_SNTP
 #define LUA_USE_MODULES_INTELLIGENTLI
