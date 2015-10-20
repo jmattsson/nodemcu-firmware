@@ -193,24 +193,27 @@ static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_erase_sector(uint16_t s
   SpiFlashOpResult res=SPIEraseSector(sector);
   Cache_Read_Enable(0,0,0);
   ets_intr_unlock();
+  return res;
 }
 
 static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_write(uint32_t addr, const uint32_t* data, uint32_t len)
 {
   ets_intr_lock();
   Cache_Read_Disable();
-  SPIWrite(addr,data,len);
+  SpiFlashOpResult res=SPIWrite(addr,data,len);
   Cache_Read_Enable(0,0,0);
   ets_intr_unlock();
+  return res;
 }
 
 static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_read(uint32_t addr, uint32_t* data, uint32_t len)
 {
   ets_intr_lock();
   Cache_Read_Disable();
-  SPIRead(addr,data,len);
+  SpiFlashOpResult res=SPIRead(addr,data,len);
   Cache_Read_Enable(0,0,0);
   ets_intr_unlock();
+  return res;
 }
 #endif
 
