@@ -139,12 +139,32 @@ static int rtcfifo_count (lua_State *L)
   return 1;
 }
 
-// num = rtcfifo.size ()
+// The "size" of a fifo cannot necessarily be described by a single number. On overflow, more than one
+// old sample may be lost....
+
+// num = rtcfifo.size () --- provides guaranteed capacity; Data *may* be lost if more entries
 static int rtcfifo_size (lua_State *L)
 {
   check_fifo_magic (L);
 
   lua_pushnumber (L, rtc_fifo_get_size ());
+  return 1;
+}
+
+// num = rtcfifo.maxsize () --- provides maximum capacity; Data *will* be lost if more entries
+static int rtcfifo_maxsize (lua_State *L)
+{
+  check_fifo_magic (L);
+
+  lua_pushnumber (L, rtc_fifo_get_max_size ());
+  return 1;
+}
+
+static int rtcfifo_maxval(lua_State *L)
+{
+  check_fifo_magic (L);
+
+  lua_pushnumber (L, rtc_fifo_get_maxval ());
   return 1;
 }
 
@@ -162,6 +182,8 @@ const LUA_REG_TYPE rtcfifo_map[] =
   { LSTRKEY("drop"),                LFUNCVAL(rtcfifo_drop) },
   { LSTRKEY("count"),               LFUNCVAL(rtcfifo_count) },
   { LSTRKEY("size"),                LFUNCVAL(rtcfifo_size) },
+  { LSTRKEY("maxsize"),             LFUNCVAL(rtcfifo_maxsize) },
+  { LSTRKEY("maxval"),              LFUNCVAL(rtcfifo_maxval) },
   { LNILKEY, LNILVAL }
 };
 
