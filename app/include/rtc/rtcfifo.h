@@ -404,6 +404,27 @@ API static inline bool rtc_fifo_drop_samples(uint32_t from_top)
   return true;
 }
 
+API static inline bool rtc_fifo_store_will_shuffle(const sample_t* s)
+{
+  uint32_t count=rtc_fifo_get_count_internal();
+  if (count==0)
+    return false;
+
+  int32_t tagindex=rtc_fifo_find_tag_index(s->tag);
+  uint32_t tail_t=rtc_fifo_get_tail_t();
+  int32_t deltat=rtc_fifo_delta_t(s->timestamp,tail_t);
+
+  if (tagindex<0 || deltat<0)
+  { // We got something that doesn't fit into the scheme. Might be a long delay, might
+    // be some sort of dynamic change. In order to go on, we'd need to start over....
+    return true;
+  }
+  if (count>=rtc_fifo_get_size_internal())
+    return true; // Full! Need to remove a sample
+
+  return false;
+}
+
 API static inline bool rtc_fifo_store_sample(const sample_t* s)
 {
   uint32_t head=rtc_fifo_get_head();

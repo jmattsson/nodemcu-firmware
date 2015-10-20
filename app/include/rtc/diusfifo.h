@@ -160,8 +160,8 @@ API static inline bool dius_fifo_drop_samples(uint32_t from_top)
 API static inline bool dius_fifo_store_sample(const sample_t* s)
 {
   // Check whether we use both, and if so, whether the RTC fifo is full....
-  if (use_rtc_fifo() && use_flash_fifo() &&
-      rtc_fifo_get_count()==rtc_fifo_get_size())
+  while (use_rtc_fifo() && use_flash_fifo() &&
+         rtc_fifo_store_will_shuffle(s))
   { // Need to shuffle one sample into the flash
     sample_t tmp;
     if (!rtc_fifo_pop_sample(&tmp))
