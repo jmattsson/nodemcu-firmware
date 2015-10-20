@@ -28,12 +28,18 @@ static uint8 prev_wifi_status=0;
 #else
 static lua_State* smart_L = NULL;
 #endif
-static void wifi_smart_succeed_cb(void *arg){
+static void wifi_smart_succeed_cb(sc_status status, void *pdata){
   NODE_DBG("wifi_smart_succeed_cb is called.\n");
+
+  if (status == SC_STATUS_LINK_OVER)
+  {
+    smartconfig_stop();
+    return;
+  }
 
 #if defined( NODE_SMART_OLDSTYLE )
 
-  if( !arg )
+  if (status != SC_STATUS_LINK || !pdata)
     return;
   if(wifi_smart_succeed == LUA_NOREF)
     return;
@@ -44,10 +50,10 @@ static void wifi_smart_succeed_cb(void *arg){
 
 #else
 
-  if( !arg )
+  if (status != SC_STATUS_LINK || !pdata)
     return;
 
-  struct station_config *sta_conf = arg;
+  struct station_config *sta_conf = pdata;
   wifi_station_set_config(sta_conf);
   wifi_station_disconnect();
   wifi_station_connect();
@@ -63,7 +69,6 @@ static void wifi_smart_succeed_cb(void *arg){
     luaL_unref(smart_L, LUA_REGISTRYINDEX, wifi_smart_succeed);
     wifi_smart_succeed = LUA_NOREF;
   }
-  smartconfig_stop();
 
 #endif // defined( NODE_SMART_OLDSTYLE )
 }
@@ -195,7 +200,8 @@ static int wifi_start_smart( lua_State* L )
   if ( smart_type > 1 )
     return luaL_error( L, "wrong arg range" );
 
-  smartconfig_start(smart_type, wifi_smart_succeed_cb);
+  smartconfig_set_type(smart_type);
+  smartconfig_start(wifi_smart_succeed_cb);
 
 #endif // defined( NODE_SMART_OLDSTYLE )
 
@@ -333,7 +339,7 @@ static int wifi_setmac( lua_State* L, uint8_t mode )
   if(len!=17)
 	  return luaL_error( L, "wrong arg type" );
 
-  os_str2macaddr(mac, macaddr);
+  ets_str2macaddr(mac, macaddr);
   lua_pushboolean(L,wifi_set_macaddr(mode, (uint8 *)mac));
   return 1;
 }
@@ -591,7 +597,7 @@ static int wifi_station_config( lua_State* L )
 	  if (ml!=17)
 	    return luaL_error( L, "MAC:FF:FF:FF:FF:FF:FF" );
 	  c_memset(sta_conf.bssid, 0, 6);
-	  os_str2macaddr(sta_conf.bssid, macaddr);
+	  ets_str2macaddr(sta_conf.bssid, macaddr);
 	  sta_conf.bssid_set = 1;
 	}
 	else
@@ -743,7 +749,7 @@ static int wifi_station_listap( lua_State* L )
 	      if(len!=17)
 	        return luaL_error( L, "bssid: FF:FF:FF:FF:FF:FF" );
 	      c_memset(bssid, 0, 6);
-	      os_str2macaddr(bssid, macaddr);
+	      ets_str2macaddr(bssid, macaddr);
 	      scan_cfg.bssid=bssid;
 	      NODE_DBG(MACSTR, MAC2STR(scan_cfg.bssid));
 	      NODE_DBG("\n");
@@ -1055,7 +1061,7 @@ static int wifi_ap_getconfig( lua_State* L )
   struct softap_config config;
   wifi_softap_get_config(&config);
   lua_pushstring( L, config.ssid );
-  if(config.authmode = AUTH_OPEN)
+  if(config.authmode == AUTH_OPEN)
     lua_pushnil(L);
   else
     lua_pushstring( L, config.password );
@@ -1229,7 +1235,7 @@ static int wifi_ap_dhcp_config( lua_State* L )
   if (ip == 0)
     return luaL_error( L, "wrong arg type" );
 
-  lease.start_ip = ip;
+  lease.start_ip.addr = ip;
   NODE_DBG(IPSTR, IP2STR(&lease.start_ip));
   NODE_DBG("\n");
 
@@ -1342,9 +1348,9 @@ const LUA_REG_TYPE wifi_map[] =
   { LSTRKEY( "SOFTAP" ), LNUMVAL( SOFTAP_MODE ) },
   { LSTRKEY( "STATIONAP" ), LNUMVAL( STATIONAP_MODE ) },
 
-  { LSTRKEY( "PHYMODE_B" ), LNUMVAL( PHY_MODE_B ) },
-  { LSTRKEY( "PHYMODE_G" ), LNUMVAL( PHY_MODE_G ) },
-  { LSTRKEY( "PHYMODE_N" ), LNUMVAL( PHY_MODE_N ) },
+  { LSTRKEY( "PHYMODE_B" ), LNUMVAL( PHY_MODE_11B ) },
+  { LSTRKEY( "PHYMODE_G" ), LNUMVAL( PHY_MODE_11G ) },
+  { LSTRKEY( "PHYMODE_N" ), LNUMVAL( PHY_MODE_11N ) },
 
   { LSTRKEY( "NONE_SLEEP" ), LNUMVAL( NONE_SLEEP_T ) },
   { LSTRKEY( "LIGHT_SLEEP" ), LNUMVAL( LIGHT_SLEEP_T ) },
@@ -1418,38 +1424,4 @@ LUALIB_API int luaopen_wifi( lua_State *L )
 
   return 1;
 #endif // #if LUA_OPTIMIZE_MEMORY > 0  
-}
-
-
-/**
- * Horrible horrible workaround to (hopefully) detect when the beacon
- * timer breaks, and to force it back into sanity. Needed for  0.9.5,
- * should not be needed for 1.1.2 once that's available.
- */
-#include <ets_sys.h>
-void __wrap_timer_insert(uint32_t when, ETSTimer *t)
-{
-  uint32_t now = NOW();
-  int32_t diff = (int32_t)(when - now);
-  static void *beacon_tmr = 0;
-  static uint32_t beacon_ival = 0;
-  if (diff > 0x4FFE0000 && !beacon_tmr)
-  {
-    c_printf("Detected broken AP beacon timer, activating workaround!\n");
-    beacon_tmr = t->timer_func;
-    struct softap_config apc;
-    if (wifi_softap_get_config (&apc))
-      beacon_ival = (apc.beacon_interval * 31250u) / 100;
-    else
-    {
-      c_printf("Failed to read beacon interval, defaulting to 100ms\n");
-      beacon_ival = 31250;
-    }
-  }
-  if ((t->timer_func == beacon_tmr) && diff > beacon_ival)
-    when = now + beacon_ival;
-  else if (diff < 0)
-    when = now;
-
-  __real_timer_insert(when, t);
 }

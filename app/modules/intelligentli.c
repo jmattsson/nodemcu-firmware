@@ -30,9 +30,18 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "auxmods.h"
-#include "ssl/ssl_ssl.h"
+#ifdef LWIP_OPEN_SRC
+#include "lwip/ip_addr.h"
+#else
+#include "ip_addr.h"
+#endif
 #include "espconn.h"
+#include "mem.h"
 #include "../crypto/digests.h"
+
+#ifndef RT_MAX_PLAIN_LENGTH
+#define RT_MAX_PLAIN_LENGTH 4096
+#endif
 
 #define MAX_ERROR_BODY 256
 
@@ -84,8 +93,8 @@ static void cleanup (ili_userdata *iliud)
 
   espconn_delete (&iliud->conn);
 
-  mem_free (iliud->conn.proto.tcp);
-  mem_free (iliud);
+  os_free (iliud->conn.proto.tcp);
+  os_free (iliud);
 }
 
 
@@ -317,12 +326,12 @@ static int intelligentli_post (lua_State *L)
   luaL_checkstring (L, 2);
   luaL_checkanyfunction (L, 3);
 
-  ili_userdata *iliud = (ili_userdata *)mem_zalloc (sizeof (ili_userdata));
+  ili_userdata *iliud = (ili_userdata *)os_zalloc (sizeof (ili_userdata));
   iliud->L = L;
   iliud->tstamp = lua_tonumber (L, 1);
   iliud->cb_ref = LUA_NOREF;
   iliud->conn.type = ESPCONN_TCP;
-  iliud->conn.proto.tcp = (esp_tcp *)mem_zalloc (sizeof (esp_tcp));
+  iliud->conn.proto.tcp = (esp_tcp *)os_zalloc (sizeof (esp_tcp));
   iliud->conn.proto.tcp->remote_port = 443;
   iliud->conn.reverse = iliud;
   espconn_regist_reconcb   (&iliud->conn, on_reconnect);
@@ -344,8 +353,8 @@ static int intelligentli_post (lua_State *L)
     case ESPCONN_OK: // already resolved!
     case ESPCONN_INPROGRESS: break;
     default:
-      mem_free (iliud->conn.proto.tcp);
-      mem_free (iliud);
+      os_free (iliud->conn.proto.tcp);
+      os_free (iliud);
       return luaL_error (L, "DNS lookup error: %d", res);
   }
 

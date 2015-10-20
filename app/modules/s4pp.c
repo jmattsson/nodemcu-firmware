@@ -1,7 +1,12 @@
 #include "lua.h"
 #include "lauxlib.h"
-#include "ssl/ssl_ssl.h"
+#ifdef LWIP_OPEN_SRC
+#include "lwip/ip_addr.h"
+#else
+#include "ip_addr.h"
+#endif
 #include "espconn.h"
+#include "mem.h"
 #include "../crypto/sha2.h"
 #include "../crypto/digests.h"
 
@@ -151,9 +156,9 @@ static void cleanup (s4pp_userdata *sud)
 
   espconn_delete (&sud->conn);
 
-  mem_free (sud->conn.proto.tcp);
-  mem_free (sud->recv_buf);
-  mem_free (sud);
+  os_free (sud->conn.proto.tcp);
+  os_free (sud->recv_buf);
+  os_free (sud);
 }
 
 static void abort_conn (s4pp_userdata *sud)
@@ -282,7 +287,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
     char *end = nl ? nl : data + len -1;
     uint16_t dlen = (end - data);
     uint16_t newlen = sud->recv_len + dlen;
-    sud->recv_buf = (char *)mem_realloc (sud->recv_buf, newlen);
+    sud->recv_buf = (char *)os_realloc (sud->recv_buf, newlen);
     if (!sud->recv_buf)
       goto_err_with_msg (sud->L, "no memory for recv buffer");
     os_memcpy (sud->recv_buf + sud->recv_len, data, newlen - sud->recv_len);
@@ -296,7 +301,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
         return; // we've ditched the connection
       else
       {
-        mem_free (sud->recv_buf);
+        os_free (sud->recv_buf);
         sud->recv_buf = 0;
         sud->recv_len = 0;
         nl = strnchr (data, '\n', len);
@@ -318,7 +323,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
   // deal with left-over pieces
   if (len)
   {
-    sud->recv_buf = os_malloc (len);
+    sud->recv_buf = (char *)os_malloc (len);
     if (!sud->recv_buf)
       goto_err_with_msg (sud->L, "no memory for recv buffer");
     sud->recv_len = len;
@@ -604,7 +609,7 @@ static int s4pp_do_upload (lua_State *L)
   const char *err_msg = 0;
 #define err_out(msg) do { err_msg = msg; goto err; } while (0)
 
-  s4pp_userdata *sud = (s4pp_userdata *)mem_zalloc (sizeof (s4pp_userdata));
+  s4pp_userdata *sud = (s4pp_userdata *)os_zalloc (sizeof (s4pp_userdata));
   if (!sud)
     err_out ("no memory");
   sud->L = L;
@@ -621,7 +626,7 @@ static int s4pp_do_upload (lua_State *L)
   sud->key_ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
   sud->conn.type = ESPCONN_TCP;
-  sud->conn.proto.tcp = (esp_tcp *)mem_zalloc (sizeof (esp_tcp));
+  sud->conn.proto.tcp = (esp_tcp *)os_zalloc (sizeof (esp_tcp));
   if (!sud->conn.proto.tcp)
     err_out ("no memory");
 
@@ -663,8 +668,8 @@ static int s4pp_do_upload (lua_State *L)
     case ESPCONN_OK: // already resolved!
     case ESPCONN_INPROGRESS: break;
     default:
-     mem_free (sud->conn.proto.tcp);
-     mem_free (sud);
+     os_free (sud->conn.proto.tcp);
+     os_free (sud);
      return luaL_error (L, "DNS lookup error: %d", res);
   }
 
@@ -675,8 +680,8 @@ static int s4pp_do_upload (lua_State *L)
 
 err:
   if (sud)
-    mem_free (sud->conn.proto.tcp);
-  mem_free (sud);
+    os_free (sud->conn.proto.tcp);
+  os_free (sud);
   return luaL_error (L, err_msg);
 }
 

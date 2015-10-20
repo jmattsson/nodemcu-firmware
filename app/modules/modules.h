@@ -229,6 +229,22 @@
 #define ROM_MODULES_S4PP
 #endif
 
+#if defined(LUA_USE_MODULES_BMP085)
+#define MODULES_BMP085      "bmp085"
+#define ROM_MODULES_BMP085  \
+    _ROM(MODULES_BMP085, luaopen_bmp085, bmp085_map)
+#else
+#define ROM_MODULES_BMP085
+#endif
+
+#if defined(LUA_USE_MODULES_TSL2561)
+#define MODULES_TSL2561      "tsl2561"
+#define ROM_MODULES_TSL2561  \
+    _ROM(MODULES_TSL2561, luaopen_tsl2561, tsl2561_map)
+#else
+#define ROM_MODULES_TSL2561
+#endif
+
 #define LUA_MODULES_ROM     \
         ROM_MODULES_GPIO    \
         ROM_MODULES_PWM		\
@@ -258,5 +274,7 @@
         ROM_MODULES_SNTP    \
         ROM_MODULES_INTELLIGENTLI  \
         ROM_MODULES_S4PP \
+        ROM_MODULES_BMP085  \
+        ROM_MODULES_TSL2561 \
 
 #endif
