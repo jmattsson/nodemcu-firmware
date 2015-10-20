@@ -14,7 +14,7 @@
 // 3: Number of samples to take before doing a "real" boot. Decremented as samples are obtained
 // 4: Reload value for (10). Needs to be applied by the firmware in the real boot (rtc_restart_samples_to_take())
 
-#define RTC_SAMPLER_BASE          1
+#define RTC_SAMPLER_BASE          10
 #define RTC_SAMPLER_MAGIC         0x64695553
 
 #define RTC_SAMPLER_MAGIC_POS  (RTC_SAMPLER_BASE+0)
