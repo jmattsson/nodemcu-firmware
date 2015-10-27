@@ -61,6 +61,14 @@
 #define ROM_MODULES_U8G
 #endif
 
+#if defined(LUA_USE_MODULES_UCG)
+#define MODULES_UCG         "ucg"
+#define ROM_MODULES_UCG     \
+    _ROM(MODULES_UCG, luaopen_ucg, lucg_map)
+#else
+#define ROM_MODULES_UCG
+#endif
+
 #if defined(LUA_USE_MODULES_I2C)
 #define MODULES_I2C         "i2c"
 #define ROM_MODULES_I2C     \
@@ -147,6 +155,14 @@
     _ROM(MODULES_WS2812, luaopen_ws2812, ws2812_map)
 #else
 #define ROM_MODULES_WS2812
+#endif
+
+#if defined(LUA_USE_MODULES_ENDUSER_SETUP)
+#define MODULES_ENDUSER_SETUP      "enduser_setup"
+#define ROM_MODULES_ENDUSER_SETUP  \
+    _ROM(MODULES_ENDUSER_SETUP, luaopen_enduser_setup, enduser_setup_map)
+#else
+#define ROM_MODULES_ENDUSER_SETUP
 #endif
 
 #if defined(LUA_USE_MODULES_CJSON)
@@ -276,6 +292,7 @@
         ROM_MODULES_COAP	\
         ROM_MODULES_MQTT    \
         ROM_MODULES_U8G     \
+        ROM_MODULES_UCG     \
         ROM_MODULES_I2C     \
         ROM_MODULES_SPI     \
         ROM_MODULES_TMR     \
@@ -286,6 +303,7 @@
         ROM_MODULES_UART    \
         ROM_MODULES_OW      \
         ROM_MODULES_BIT     \
+        ROM_MODULES_ENDUSER_SETUP \
         ROM_MODULES_WS2801  \
         ROM_MODULES_WS2812  \
         ROM_MODULES_CJSON   \
