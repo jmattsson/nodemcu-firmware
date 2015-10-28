@@ -42,6 +42,7 @@ typedef struct
   int key_ref;
   int iter_ref;
   int cb_ref;
+  int token_ref;
   int dict_ref;
   int work_ref;
   int err_ref;
@@ -60,10 +61,12 @@ typedef struct
   uint16_t recv_len;
 
   int next_idx;
+  uint16_t next_seq;
   uint16_t n_max;
   uint16_t n_sent;
   uint32_t lasttime;
   SHA256_CTX ctx;
+  bool end_of_data;
 } s4pp_userdata;
 
 
@@ -135,12 +138,12 @@ static void push_final_hmac_hex (s4pp_userdata *sud)
 }
 
 
-
 static lua_State *push_callback (s4pp_userdata *sud)
 {
   lua_rawgeti (sud->L, LUA_REGISTRYINDEX, sud->cb_ref);
   return sud->L;
 }
+
 
 static void cleanup (s4pp_userdata *sud)
 {
@@ -161,6 +164,7 @@ static void cleanup (s4pp_userdata *sud)
   os_free (sud);
 }
 
+
 static void abort_conn (s4pp_userdata *sud)
 {
   sud->state = S4PP_ERRORED;
@@ -168,14 +172,14 @@ static void abort_conn (s4pp_userdata *sud)
   sud->funcs->disconnect (&sud->conn);
 }
 
-static char *strnchr (char *p, char x, uint16_t len)
-{
-  uint16_t i;
-  for (i = 0; i < len; ++i, ++p)
-    if (*p == x)
-      return p;
 
-  return 0;
+static void prepare_seq_hmac (s4pp_userdata *sud)
+{
+  init_hmac (sud);
+  lua_State *L = sud->L;
+  lua_rawgeti (L, LUA_REGISTRYINDEX, sud->token_ref);
+  update_hmac (sud);
+  lua_pop (L, 1);
 }
 
 
@@ -183,6 +187,8 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
 {
   lua_State *L = sud->L;
   lua_checkstack (L, 5);
+  lua_pushlstring (L, token, len);
+  sud->token_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   lua_rawgeti (L, LUA_REGISTRYINDEX, sud->user_ref);
   lua_pushlstring (L, token, len);
   lua_concat (L, 2);
@@ -213,123 +219,9 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
     goto_err_with_msg (sud->L, "send failed: %d", err);
 
   sud->state = S4PP_AUTHED;
-  init_hmac (sud);
-  lua_pushlstring (L, token, len);
-  update_hmac (sud);
+  prepare_seq_hmac (sud);
 
   return;
-err:
-  abort_conn (sud);
-}
-
-
-static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
-{
-  if (line[len -1] == '\n')
-    line[len -1] = 0;
-  else
-    goto_err_with_msg (sud->L, "missing newline");
-  if (strncmp ("S4PP/", line, 5) == 0)
-  {
-    // S4PP/x.y <algos,algo..> <max_samples>
-    if (sud->state > S4PP_INIT)
-      goto_err_with_msg (sud->L, "unexpected S4pp hello");
-
-    char *algos = strchr (line, ' ');
-    if (!algos || !strstr (algos, "SHA256"))
-      goto_err_with_msg (sud->L, "server does not support SHA256");
-
-    char *maxn = strchr (algos + 1, ' ');
-    if (maxn)
-      sud->n_max = strtol (maxn, NULL, 0);
-    if (!sud->n_max)
-      goto_err_with_msg (sud->L, "bad hello");
-
-    sud->state = S4PP_HELLO;
-  }
-  else if (strncmp ("TOK:", line, 4) == 0)
-  {
-    if (sud->state == S4PP_HELLO)
-      handle_auth (sud, line + 4, len - 5); // ditch \0
-    else
-      goto_err_with_msg (sud->L, "bad tok");
-  }
-  else if (strncmp ("REJ:", line, 4) == 0)
-    goto_err_with_msg (sud->L, "protocol error: %s", line + 4);
-  else if (strncmp ("NOK:", line, 4) == 0)
-    // we don't pipeline, so don't need to check the seqno
-    goto_err_with_msg (sud->L, "commit failed");
-  else if (strncmp ("OK:", line, 3) == 0)
-  {
-    sud->state = S4PP_DONE;
-    sud->funcs->disconnect (&sud->conn);
-  }
-  else
-    goto_err_with_msg (sud->L, "unexpected response: %s", line);
-  return;
-err:
-  abort_conn (sud);
-}
-
-
-static void on_recv (void *arg, char *data, uint16_t len)
-{
-  if (!len)
-    return;
-
-  s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
-
-  char *nl = strnchr (data, '\n', len);
-
-  // deal with joining with previous chunk
-  if (sud->recv_len)
-  {
-    char *end = nl ? nl : data + len -1;
-    uint16_t dlen = (end - data);
-    uint16_t newlen = sud->recv_len + dlen;
-    sud->recv_buf = (char *)os_realloc (sud->recv_buf, newlen);
-    if (!sud->recv_buf)
-      goto_err_with_msg (sud->L, "no memory for recv buffer");
-    os_memcpy (sud->recv_buf + sud->recv_len, data, newlen - sud->recv_len);
-    sud->recv_len = newlen;
-    data += dlen;
-    len -= dlen;
-
-    if (nl)
-    {
-      if (!handle_line (sud, sud->recv_buf, sud->recv_len))
-        return; // we've ditched the connection
-      else
-      {
-        os_free (sud->recv_buf);
-        sud->recv_buf = 0;
-        sud->recv_len = 0;
-        nl = strnchr (data, '\n', len);
-      }
-    }
-  }
-  // handle full lines inside 'data'
-  while (nl)
-  {
-    uint16_t dlen = (nl - data) +1;
-    if (!handle_line (sud, data, dlen))
-      return;
-
-    data += dlen;
-    len -= dlen;
-    nl = strnchr (data, '\n', len);
-  }
-
-  // deal with left-over pieces
-  if (len)
-  {
-    sud->recv_buf = (char *)os_malloc (len);
-    if (!sud->recv_buf)
-      goto_err_with_msg (sud->L, "no memory for recv buffer");
-    sud->recv_len = len;
-  }
-  return;
-
 err:
   abort_conn (sud);
 }
@@ -436,9 +328,8 @@ failed:
 }
 
 
-static void on_sent (void *arg)
+static void progress_work (s4pp_userdata *sud)
 {
-  s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
   lua_State *L = sud->L;
   int concat_n = 0;
   size_t sz_estimate = 0;
@@ -446,9 +337,16 @@ static void on_sent (void *arg)
   {
     case S4PP_AUTHED:
     {
-      lua_pushliteral (L, "SEQ:0,0,1,0\n"); // seq:0 time:0 timediv:1 datafmt:0
-      concat_n = 1;
+      lua_pushliteral (L, "SEQ:");
+      lua_pushnumber (L, sud->next_seq++);
+      lua_pushliteral (L, ",0,1,0\n"); // seq:N time:0 timediv:1 datafmt:0
+      concat_n = 3;
       sz_estimate = 12;
+      sud->next_idx = 0;
+      sud->n_sent = 0;
+      luaL_unref (L, LUA_REGISTRYINDEX, sud->dict_ref);
+      lua_newtable (L);
+      sud->dict_ref = luaL_ref (L, LUA_REGISTRYINDEX);
       sud->state = S4PP_BUFFERING;
       // fall through
     }
@@ -506,6 +404,7 @@ static void on_sent (void *arg)
           {
             sig = true;
             lua_pop (L, 1);
+            sud->end_of_data = true;
           }
           else
             goto_err_with_msg (L, "iterator returned garbage");
@@ -529,6 +428,7 @@ static void on_sent (void *arg)
       size_t len;
       const char *str = lua_tolstring (L, -1, &len);
       int res = sud->funcs->send (&sud->conn, (uint8_t *)str, len);
+
       lua_pop (L, 1);
       if (res != 0)
         goto_err_with_msg (L, "send failed: %d", res);
@@ -542,6 +442,135 @@ static void on_sent (void *arg)
   return;
 err:
   abort_conn (sud);
+}
+
+
+static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
+{
+  if (line[len -1] == '\n')
+    line[len -1] = 0;
+  else
+    goto_err_with_msg (sud->L, "missing newline");
+  if (strncmp ("S4PP/", line, 5) == 0)
+  {
+    // S4PP/x.y <algos,algo..> <max_samples>
+    if (sud->state > S4PP_INIT)
+      goto_err_with_msg (sud->L, "unexpected S4pp hello");
+
+    char *algos = strchr (line, ' ');
+    if (!algos || !strstr (algos, "SHA256"))
+      goto_err_with_msg (sud->L, "server does not support SHA256");
+
+    char *maxn = strchr (algos + 1, ' ');
+    if (maxn)
+      sud->n_max = strtol (maxn, NULL, 0);
+    if (!sud->n_max)
+      goto_err_with_msg (sud->L, "bad hello");
+
+    sud->state = S4PP_HELLO;
+  }
+  else if (strncmp ("TOK:", line, 4) == 0)
+  {
+    if (sud->state == S4PP_HELLO)
+      handle_auth (sud, line + 4, len - 5); // ditch \0
+    else
+      goto_err_with_msg (sud->L, "bad tok");
+  }
+  else if (strncmp ("REJ:", line, 4) == 0)
+    goto_err_with_msg (sud->L, "protocol error: %s", line + 4);
+  else if (strncmp ("NOK:", line, 4) == 0)
+    // we don't pipeline, so don't need to check the seqno
+    goto_err_with_msg (sud->L, "commit failed");
+  else if (strncmp ("OK:", line, 3) == 0)
+  {
+    if (sud->end_of_data)
+    {
+      sud->state = S4PP_DONE;
+      sud->funcs->disconnect (&sud->conn);
+    }
+    else
+    {
+      sud->state = S4PP_AUTHED;
+      prepare_seq_hmac (sud);
+      progress_work (sud);
+    }
+  }
+  else
+    goto_err_with_msg (sud->L, "unexpected response: %s", line);
+  return true;
+err:
+  abort_conn (sud);
+  return false;
+}
+
+
+static void on_recv (void *arg, char *data, uint16_t len)
+{
+  if (!len)
+    return;
+
+  s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
+
+  char *nl = memchr (data, '\n', len);
+
+  // deal with joining with previous chunk
+  if (sud->recv_len)
+  {
+    char *end = nl ? nl : data + len -1;
+    uint16_t dlen = (end - data);
+    uint16_t newlen = sud->recv_len + dlen;
+    sud->recv_buf = (char *)os_realloc (sud->recv_buf, newlen);
+    if (!sud->recv_buf)
+      goto_err_with_msg (sud->L, "no memory for recv buffer");
+    os_memcpy (sud->recv_buf + sud->recv_len, data, newlen - sud->recv_len);
+    sud->recv_len = newlen;
+    data += dlen;
+    len -= dlen;
+
+    if (nl)
+    {
+      if (!handle_line (sud, sud->recv_buf, sud->recv_len))
+        return; // we've ditched the connection
+      else
+      {
+        os_free (sud->recv_buf);
+        sud->recv_buf = 0;
+        sud->recv_len = 0;
+        nl = memchr (data, '\n', len);
+      }
+    }
+  }
+  // handle full lines inside 'data'
+  while (nl)
+  {
+    uint16_t dlen = (nl - data) +1;
+    if (!handle_line (sud, data, dlen))
+      return;
+
+    data += dlen;
+    len -= dlen;
+    nl = memchr (data, '\n', len);
+  }
+
+  // deal with left-over pieces
+  if (len)
+  {
+    sud->recv_buf = (char *)os_malloc (len);
+    if (!sud->recv_buf)
+      goto_err_with_msg (sud->L, "no memory for recv buffer");
+    sud->recv_len = len;
+  }
+  return;
+
+err:
+  abort_conn (sud);
+}
+
+
+static void on_sent (void *arg)
+{
+  s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
+  progress_work (sud);
 }
 
 
@@ -565,6 +594,7 @@ static void on_disconnect (void *arg)
   }
 }
 
+
 static void on_reconnect (void *arg, int8_t err)
 {
   s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
@@ -573,6 +603,7 @@ static void on_reconnect (void *arg, int8_t err)
   lua_pushfstring (L, "error: %d", err);
   lua_call (L, 1, 0);
 }
+
 
 static void on_dns_found (const char *name, ip_addr_t *ip, void *arg)
 {
@@ -613,7 +644,8 @@ static int s4pp_do_upload (lua_State *L)
   if (!sud)
     err_out ("no memory");
   sud->L = L;
-  sud->cb_ref = sud->user_ref = sud->key_ref = sud->err_ref = sud->work_ref = LUA_NOREF;
+  sud->cb_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->work_ref = sud->dict_ref = LUA_NOREF;
+  // TODO: also support a progress callback for each seq commit?
 
   lua_getfield (L, 1, "user");
   if (!lua_isstring (L, -1))
@@ -654,8 +686,6 @@ static int s4pp_do_upload (lua_State *L)
   sud->iter_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   lua_pushvalue (L, 3);
   sud->cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-  lua_newtable (L);
-  sud->dict_ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
   lua_getfield (L, 1, "server");
   if (!lua_isstring (L, -1))
