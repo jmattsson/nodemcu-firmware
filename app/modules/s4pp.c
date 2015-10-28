@@ -344,6 +344,7 @@ static void progress_work (s4pp_userdata *sud)
       sz_estimate = 12;
       sud->next_idx = 0;
       sud->n_sent = 0;
+      sud->lasttime = 0;
       luaL_unref (L, LUA_REGISTRYINDEX, sud->dict_ref);
       lua_newtable (L);
       sud->dict_ref = luaL_ref (L, LUA_REGISTRYINDEX);
