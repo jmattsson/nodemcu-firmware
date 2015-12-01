@@ -24,7 +24,10 @@
 #include "mem.h"
 
 #ifdef LUA_USE_MODULES_RTCTIME
-#include "rtc/rtctime.h"
+# include "rtc/rtctime.h"
+#endif
+#ifdef LUA_USE_MODULES_OTAUPGRADE
+# include "otaupgrade.h"
 #endif
 
 #define SIG_LUA 0
@@ -44,10 +47,14 @@ static uint8_t no_init_data = 0xff;
  * by the time it is invoked the irom has not yet been mapped. This naturally
  * also goes for anything the trampoline itself calls.
  */
-void TEXT_SECTION_ATTR user_start_trampoline (void)
+void TEXT_SECTION_ATTR user_start_trampoline (uint32_t bootarg)
 {
    __real__xtos_set_exception_handler (
      EXCCAUSE_LOAD_STORE_ERROR, load_non_32_wide_handler);
+
+#ifdef LUA_USE_MODULES_OTAUPGRADE
+  otaupgrade_save_booted_slot (bootarg);
+#endif
 
 #ifdef LUA_USE_MODULES_RTCTIME
   // Note: Keep this as close to call_user_start() as possible, since it

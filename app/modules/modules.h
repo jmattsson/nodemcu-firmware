@@ -253,11 +253,19 @@
 #define ROM_MODULES_HX711
 #endif
 
+#if defined(LUA_USE_MODULES_OTAUPGRADE)
+#define MODULES_OTAUPGRADE  "otaupgrade"
+#define ROM_MODULES_OTAUPGRADE  \
+    _ROM(MODULES_OTAUPGRADE, luaopen_otaupgrade, otaupgrade_map)
+#else
+#define ROM_MODULES_OTAUPGRADE
+#endif
+
 #define LUA_MODULES_ROM     \
         ROM_MODULES_GPIO    \
-        ROM_MODULES_PWM		\
-        ROM_MODULES_WIFI	\
-        ROM_MODULES_COAP	\
+        ROM_MODULES_PWM     \
+        ROM_MODULES_WIFI    \
+        ROM_MODULES_COAP    \
         ROM_MODULES_MQTT    \
         ROM_MODULES_U8G     \
         ROM_MODULES_UCG     \
@@ -284,6 +292,7 @@
         ROM_MODULES_SNTP    \
         ROM_MODULES_BMP085  \
         ROM_MODULES_TSL2561 \
-        ROM_MODULES_HX711  
+        ROM_MODULES_HX711   \
+        ROM_MODULES_OTAUPGRADE \
 
 #endif
