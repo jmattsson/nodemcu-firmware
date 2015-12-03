@@ -23,7 +23,7 @@ static int adc_sample( lua_State* L )
 // Lua: readvdd33()
 static int adc_readvdd33( lua_State* L )
 {
-  lua_pushinteger(L, system_get_vdd33());
+  lua_pushinteger(L, system_get_vdd33 ());
   return 1;
 }
 
