@@ -228,6 +228,7 @@ SECTIONS
     *(.init)
     *(.literal .text .stub .gnu.warning .gnu.linkonce.literal.* .gnu.linkonce.t.*.literal .gnu.linkonce.t.*)
     *(.iram0.text)
+    *(.ota.iram0.text .ota.iram0.data)
     *(.fini.literal)
     *(.fini)
     *(.gnu.version)
@@ -248,3 +249,6 @@ SECTIONS
 
 /* get ROM code address */
 INCLUDE "eagle.rom.addr.v6.ld"
+
+/* for OTA upgrade support, provide alternate name for real Cache_Read_Enable */
+PROVIDE(ROM_Cache_Read_Enable = 0x40004678);
