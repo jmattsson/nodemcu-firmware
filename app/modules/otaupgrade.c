@@ -103,7 +103,7 @@ static bool ota_flashing_in_progress;
 
 static ota_header get_ota_header (lua_State *L, uint8_t slot)
 {
-  uint32_t addr = (slot * MEGABYTE + INTERNAL_FLASH_START_ADDRESS + FW_OFFS);
+  uint32_t addr = (slot * MEGABYTE + FW_OFFS);
   ota_header hdr;
   platform_flash_read (&hdr, addr, sizeof (hdr));
   if (hdr.magic != OTA_HDR_MAGIC)
@@ -127,9 +127,7 @@ static void ensure_possible (lua_State *L, intest_policy_t policy)
 
 static inline uint32_t get_flash_write_addr_for_offset (uint8_t slot, uint32_t offs)
 {
-  /* For some reason the platform_flash_write() uses offsets based on
-   * INTERNAL_FLASH_START_ADDRESS, even though it doesn't use mapped memory */
-  return slot * MEGABYTE + INTERNAL_FLASH_START_ADDRESS +  FW_OFFS + offs;
+  return slot * MEGABYTE +  FW_OFFS + offs;
 }
 
 
