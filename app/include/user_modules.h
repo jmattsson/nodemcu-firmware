@@ -19,25 +19,26 @@
 #define LUA_USE_MODULES_BIT
 //#define LUA_USE_MODULES_BMP085
 #define LUA_USE_MODULES_CJSON
-#define LUA_USE_MODULES_COAP
+//#define LUA_USE_MODULES_COAP
 #define LUA_USE_MODULES_CRYPTO
-#define LUA_USE_MODULES_DHT
+//#define LUA_USE_MODULES_DHT
 //#define LUA_USE_MODULES_ENDUSER_SETUP // USE_DNS in dhcpserver.h needs to be enabled for this module to work.
 #define LUA_USE_MODULES_FILE
 #define LUA_USE_MODULES_GPIO
 //#define LUA_USE_MODULES_HX711
-#define LUA_USE_MODULES_I2C
-#define LUA_USE_MODULES_MQTT
+//#define LUA_USE_MODULES_I2C
+//#define LUA_USE_MODULES_MQTT
 #define LUA_USE_MODULES_NET
 #define LUA_USE_MODULES_NODE
 #define LUA_USE_MODULES_OW
-#define LUA_USE_MODULES_PWM
+//#define LUA_USE_MODULES_PWM
 #define LUA_USE_MODULES_RC
 #define LUA_USE_MODULES_RTCFIFO
 #define LUA_USE_MODULES_RTCMEM
 #define LUA_USE_MODULES_RTCTIME
-// #define LUA_USE_MODULES_FLASHFIFO // Note: These use a fixed flash area. Configure appropriately
-// #define LUA_USE_MODULES_DIUSFIFO  //       if you are going to use them!
+#define LUA_USE_MODULES_RTCFIFO
+#define LUA_USE_MODULES_FLASHFIFO // Note: These use a fixed flash area. Configure appropriately
+#define LUA_USE_MODULES_DIUSFIFO  //       if you are going to use them!
 #define LUA_USE_MODULES_RTCSAMPLER
 #define LUA_USE_MODULES_SNTP
 #define LUA_USE_MODULES_INTELLIGENTLI

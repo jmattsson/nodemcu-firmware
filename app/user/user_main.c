@@ -56,6 +56,8 @@ void TEXT_SECTION_ATTR user_start_trampoline (uint32_t bootarg)
   otaupgrade_save_booted_slot (bootarg);
 #endif
 
+  int i;
+
 #ifdef LUA_USE_MODULES_RTCTIME
   // Note: Keep this as close to call_user_start() as possible, since it
   // is where the cpu clock actually gets bumped to 80MHz.
@@ -133,8 +135,43 @@ void task_init(void){
 
 // extern uint16_t flash_get_sec_num();
 
+#include <espnow.h>
+
+static void rxcb(uint8_t* mac, uint8_t* data, uint8_t len)
+{
+    c_printf("Got esp-now from %02x:%02x:%02x:%02x:%02x:%02x, data: ",
+             mac[0],
+             mac[1],
+             mac[2],
+             mac[3],
+             mac[4],
+             mac[5]);
+    while (len--)
+    {
+        c_printf("%02x ",*(data++));
+    }
+    c_printf("\n");
+}
+
+static void nownow()
+{
+    esp_now_init();
+    // esp_now_register_recv_cb(simple_cb);
+    esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+    uint8_t target[]  __attribute__ ((aligned(4)))={0x18,0xfe,0x34,0x9b,0x1c,0xe6};
+    uint8_t key[]  __attribute__ ((aligned(16)))={0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff};
+    uint8_t kok[]  __attribute__ ((aligned(16)))={0xff,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0x00};
+
+    esp_now_add_peer(target,ESP_NOW_ROLE_SLAVE,1,key,16);
+    esp_now_set_kok(kok,16);
+    esp_now_register_recv_cb(rxcb);
+}
+
 void nodemcu_init(void)
 {
+    int i;
+
+    nownow();
     NODE_ERR("\n");
     // Initialize platform first for lua modules.
     if( platform_init() != PLATFORM_OK )
@@ -224,7 +261,6 @@ void user_init(void)
     // os_delay_us(50*1000);   // delay 50ms before init uart
 
     UartBautRate br = BIT_RATE_DEFAULT;
-
     uart_init (br, br, USER_TASK_PRIO_0, SIG_UARTINPUT);
 
     #ifndef NODE_DEBUG
