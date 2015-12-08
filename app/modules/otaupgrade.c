@@ -39,7 +39,7 @@
  * be Rather Bad(tm) */
 #ifdef LUA_USE_MODULES_OTAUPGRADE
 
-#if !defined(SPIFFS_FIXED_LOCATION)
+#if !defined(SPIFFS_FIXED_LOCATION) && !SPIFFS_SIZE_1M_BOUNDARY
 # error "SPIFFS location must be explicitly set when using OTA upgrade!"
 #endif
 
