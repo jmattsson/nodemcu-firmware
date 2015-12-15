@@ -191,6 +191,14 @@ static int file_fsinfo( lua_State* L )
   return 3;
 }
 
+// Lua: phys_addr, phys_sz = file.fscfg()
+static int file_fscfg (lua_State *L)
+{
+  lua_pushinteger (L, fs.cfg.phys_addr);
+  lua_pushinteger (L, fs.cfg.phys_size);
+  return 2;
+}
+
 #endif
 
 // g_read()
@@ -319,6 +327,7 @@ const LUA_REG_TYPE file_map[] =
   // { LSTRKEY( "check" ), LFUNCVAL( file_check ) },
   { LSTRKEY( "rename" ), LFUNCVAL( file_rename ) },
   { LSTRKEY( "fsinfo" ), LFUNCVAL( file_fsinfo ) },
+  { LSTRKEY( "fscfg" ),  LFUNCVAL( file_fscfg ) },
 #endif
   
 #if LUA_OPTIMIZE_MEMORY > 0

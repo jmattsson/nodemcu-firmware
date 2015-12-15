@@ -44,20 +44,32 @@ The small 4KB sectors allow for greater flexibility in applications th
 
 ********************/
 
+static void get_fs_start_and_size (uint32_t *phys_addr, uint32_t *phys_size)
+{
+#ifdef SPIFFS_FIXED_LOCATION
+  *phys_addr = SPIFFS_FIXED_LOCATION;
+#else
+  *phys_addr = platform_flash_get_first_free_block_address (NULL);
+#endif
+  *phys_addr += 0x3000;
+  *phys_addr &= 0xFFFFC000;  // align to 4 sector.
+
+#if defined(SPIFFS_FIXED_SIZE)
+  *phys_size = SPIFFS_FIXED_SIZE;
+#elif defined(SPIFFS_SIZE_1M_BOUNDARY) && SPIFFS_SIZE_1M_BOUNDARY
+  /* limit to 1-meg boundary (minus param pages) by default */
+  uint32_t next_meg = (*phys_addr + 0x100000) & 0xFFF00000;
+  *phys_size = next_meg - *phys_addr - (SYS_PARAM_SEC_NUM * INTERNAL_FLASH_SECTOR_SIZE);
+#else
+  /* INTERNAL_FLASH_SIZE already excludes the param pages */
+  *phys_size = INTERNAL_FLASH_SIZE - *phys_addr;
+#endif
+}
+
+
 void myspiffs_mount() {
   spiffs_config cfg;
-#ifdef SPIFFS_FIXED_LOCATION
-  cfg.phys_addr = SPIFFS_FIXED_LOCATION;
-#else
-  cfg.phys_addr = ( u32_t )platform_flash_get_first_free_block_address( NULL ); 
-#endif
-  cfg.phys_addr += 0x3000;
-  cfg.phys_addr &= 0xFFFFC000;  // align to 4 sector.
-#ifdef SPIFFS_FIXED_SIZE
-  cfg.phys_size = SPIFFS_FIXED_SIZE;
-#else
-  cfg.phys_size = INTERNAL_FLASH_SIZE - ( ( u32_t )cfg.phys_addr );
-#endif
+  get_fs_start_and_size (&cfg.phys_addr, &cfg.phys_size);
   cfg.phys_erase_block = INTERNAL_FLASH_SECTOR_SIZE; // according to datasheet
   cfg.log_block_size = INTERNAL_FLASH_SECTOR_SIZE; // let us not complicate things
   cfg.log_page_size = LOG_PAGE_SIZE; // as we said
@@ -92,21 +104,11 @@ void myspiffs_unmount() {
 int myspiffs_format( void )
 {
   SPIFFS_unmount(&fs);
+  uint32_t phys_addr, phys_size;
+  get_fs_start_and_size (&phys_addr, &phys_size);
   u32_t sect_first, sect_last;
-#ifdef SPIFFS_FIXED_LOCATION
-  sect_first = SPIFFS_FIXED_LOCATION;
-#else
-  sect_first = ( u32_t )platform_flash_get_first_free_block_address( NULL ); 
-#endif
-  sect_first += 0x3000;
-  sect_first &= 0xFFFFC000;  // align to 4 sector.
-#ifdef SPIFFS_FIXED_SIZE
-  sect_last = sect_first + SPIFFS_FIXED_SIZE - SYS_PARAM_SEC_NUM;
-#else
-  sect_last = INTERNAL_FLASH_SIZE - SYS_PARAM_SEC_NUM;
-#endif
-  sect_first = platform_flash_get_sector_of_address(sect_first);
-  sect_last = platform_flash_get_sector_of_address(sect_last);
+  sect_first = platform_flash_get_sector_of_address(phys_addr);
+  sect_last = platform_flash_get_sector_of_address(phys_addr + phys_size) - 1;
   NODE_DBG("sect_first: %x, sect_last: %x\n", sect_first, sect_last);
   while( sect_first <= sect_last )
     if( platform_flash_erase_sector( sect_first ++ ) == PLATFORM_ERR )
