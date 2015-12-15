@@ -2,6 +2,7 @@
 
 #include "lauxlib.h"
 #include "user_modules.h"
+#include "user_config.h"
 #include "rtc/flashfifo.h"
 
 // flashfifo.prepare ()

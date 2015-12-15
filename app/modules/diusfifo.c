@@ -2,7 +2,17 @@
 
 #include "lauxlib.h"
 #include "user_modules.h"
+#include "user_config.h"
 #include "rtc/diusfifo.h"
+
+#ifdef LUA_USE_MODULES_DIUSFIFO
+#if defined(LUA_USE_MODULES_RTCFIFO) && DIUS_FIFO_USE_RTC_SAMPLER
+#error RTC fifo memory used by DIUS fifo module, cannot also build RTCFIFO Module
+#endif
+#if defined(LUA_USE_MODULES_FLASHFIFO) && DIUS_FIFO_USE_FLASH_MEM
+#error flash fifo memory used by DIUS fifo module, cannot also build FLASHFIFO Module
+#endif
+#endif
 
 // diusfifo.prepare ([{sensor_count=n, interval_us=m, samples_per=p storage_begin=x, storage_end=y}])
 static int diusfifo_prepare (lua_State *L)
