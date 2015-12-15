@@ -242,11 +242,28 @@ INTERNAL static inline bool flash_fifo_valid_header(const flash_fifo_t* fifo)
   return true;
 }
 
+#ifdef BOOTLOADER_CODE
+// We can't use the system function, because we don't have the whole system available
+// On the other hand, we don't have to worry about the system's software watchdog, either,
+// just the hardware one. So let's do it the bare-metal way...static void flash_fifo_tickle_watchdog(void)
+static void flash_fifo_tickle_watchdog(void)
+{
+  WRITE_PERI_REG(0x60000914, 0x73);
+}
+#else
+extern void system_soft_wdt_feed();
+static void flash_fifo_tickle_watchdog(void)
+{
+  system_soft_wdt_feed();
+}
+#endif
+
 // All these functions return TRUE on success, FALSE on failure
 INTERNAL static inline bool flash_fifo_erase_sectors(uint32_t first, uint32_t count)
 {
   while (count--)
   {
+    flash_fifo_tickle_watchdog();
     if (spi_flash_erase_sector(first)!=SPI_FLASH_RESULT_OK)
       return false;
     first++;
