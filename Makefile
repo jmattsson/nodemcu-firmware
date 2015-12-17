@@ -1,17 +1,22 @@
 #  copyright (c) 2010 Espressif System
 #
 .NOTPARALLEL:
-ifndef PDIR
-
-endif
 
 # SDK version NodeMCU is locked to
-SDK_VER:=1.4.0
-# Ensure we search "our" SDK before the tool-chain's SDK (if any)
+SDK_VER:=1.5.0
 TOP_DIR:=$(dir $(lastword $(MAKEFILE_LIST)))
-SDK_DIR:=$(TOP_DIR)sdk/esp_iot_sdk_v$(SDK_VER)
+SDK_DIR:=$(TOP_DIR)build/esp-open-sdk/sdk
 CCFLAGS:= -I$(TOP_DIR)sdk-overrides/include -I$(SDK_DIR)/include
 LDFLAGS:= -L$(SDK_DIR)/lib -L$(SDK_DIR)/ld $(LDFLAGS)
+
+export PATH:=$(abspath $(TOP_DIR)build/esp-open-sdk/xtensa-lx106-elf/bin:$(PATH))
+
+# When running make from this dir, add toolchain target to 'all'
+ifndef PDIR
+TOOLCHAIN:=toolchain
+else
+TOOLCHAIN:=
+endif
 
 #############################################################
 # Select compile
@@ -90,7 +95,7 @@ ESPTOOL ?= ../tools/esptool.py
 CSRCS ?= $(wildcard *.c)
 ASRCs ?= $(wildcard *.s)
 ASRCS ?= $(wildcard *.S)
-SUBDIRS ?= $(patsubst %/,%,$(dir $(wildcard */Makefile)))
+SUBDIRS ?= $(filter-out %build,$(patsubst %/,%,$(dir $(wildcard */Makefile))))
 
 ODIR := .output
 OBJODIR := $(ODIR)/$(TARGET)/$(FLAVOR)/obj
@@ -171,7 +176,19 @@ $(BINODIR)/%.bin: $(IMAGEODIR)/%.out
 # Should be done in top-level makefile only
 #
 
-all:	.subdirs $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+all:	$(TOOLCHAIN) .subdirs $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+
+.PHONY: toolchain
+toolchain: $(TOP_DIR)/build/Makefile
+	$(MAKE) -C $(TOP_DIR)/build MAKEFLAGS= SDK_VERSION=$(SDK_VER)
+
+$(TOP_DIR)/build/Makefile:
+	(cd $(TOP_DIR); git submodule update --init --force; )
+	touch $@
+
+.PHONY: clean-toolchain
+clean-toolchain:
+	$(MAKE) -C $(TOP_DIR)/build $@
 
 clean:
 	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clean;)

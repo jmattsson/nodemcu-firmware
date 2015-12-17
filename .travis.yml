@@ -1,14 +1,32 @@
 sudo: false
 language: cpp
+cache:
+  directories:
+  - $HOME/sdk_cache
+before_install:
+  - git submodule update --init --recursive
+install:
+  - cd $TRAVIS_BUILD_DIR
+  - if [ -e $HOME/sdk_cache/esp-open-sdk.tar.gz ]; then tar -xzf $HOME/sdk_cache/esp-open-sdk.tar.gz; fi
+before_cache:
+  - mkdir -p $HOME/sdk_cache
+  - cd $TRAVIS_BUILD_DIR
+  - rm build/esp-open-sdk/esp_iot_sdk*zip
+  - tar -czf $HOME/sdk_cache/esp-open-sdk.tar.gz build/.toolchain.* build/esp-open-sdk/.cache_copied build/.submodules build/esp-open-sdk/xtensa-lx106-elf build/esp-open-sdk/*sdk*
 addons:
   apt:
     packages:
+    - libtool
+    - gperf
+    - flex
+    - bison
+    - texinfo
+    - gawk
     - python-serial
     - srecord
-install:
-- tar -zxvf tools/esp-open-sdk.tar.gz
-- export PATH=$PATH:$PWD/esp-open-sdk/xtensa-lx106-elf/bin
 script:
+- unset CC
+- unset CXX
 - export BUILD_DATE=$(date +%Y%m%d)
 - make EXTRA_CCFLAGS="-DBUILD_DATE='\"'$BUILD_DATE'\"'" all
 - cd bin/
@@ -16,7 +34,7 @@ script:
 - srec_cat -output ${file_name_float} -binary 0x00000.bin -binary -fill 0xff 0x00000 0x10000 0x10000.bin -binary -offset 0x10000
 - cd ../
 - make clean
-- make EXTRA_CCFLAGS="-DLUA_NUMBER_INTEGRAL -DBUILD_DATE='\"'$BUILD_DATE'\"'"
+- make EXTRA_CCFLAGS="-DLUA_NUMBER_INTEGRAL -DBUILD_DATE='\"'$BUILD_DATE'\"'" all
 - cd bin/
 - file_name_integer="nodemcu_integer_${TRAVIS_TAG}.bin"
 - srec_cat -output ${file_name_integer} -binary 0x00000.bin -binary -fill 0xff 0x00000 0x10000 0x10000.bin -binary -offset 0x10000

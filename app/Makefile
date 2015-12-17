@@ -111,6 +111,7 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-lsmartconfig 				\
 	-lssl 					\
 	$(DEP_LIBS_eagle.app.v6) 		\
+	-lcrypto					\
 	-Wl,--end-group 			\
 	-lm
 
