@@ -1,16 +1,15 @@
 #  copyright (c) 2010 Espressif System
 #
 .NOTPARALLEL:
-ifndef PDIR
-
-endif
 
 # SDK version NodeMCU is locked to
-SDK_VER:=1.4.0
+SDK_VER:=1.5.0
+SDK_FILE_VER:=1.5.0_15_11_27
+SDK_FILE_ID:=989
 # Ensure we search "our" SDK before the tool-chain's SDK (if any)
-TOP_DIR:=$(dir $(lastword $(MAKEFILE_LIST)))
-SDK_DIR:=$(TOP_DIR)sdk/esp_iot_sdk_v$(SDK_VER)
-CCFLAGS:= -I$(TOP_DIR)sdk-overrides/include -I$(SDK_DIR)/include
+TOP_DIR:=$(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SDK_DIR:=$(TOP_DIR)/sdk/esp_iot_sdk_v$(SDK_VER)
+CCFLAGS:= -I$(TOP_DIR)/sdk-overrides/include -I$(SDK_DIR)/include
 LDFLAGS:= -L$(SDK_DIR)/lib -L$(SDK_DIR)/ld $(LDFLAGS)
 
 #############################################################
@@ -171,11 +170,25 @@ $(BINODIR)/%.bin: $(IMAGEODIR)/%.out
 # Should be done in top-level makefile only
 #
 
-all:	.subdirs $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+all:	sdk_extracted .subdirs $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+
+.PHONY: sdk_extracted
+sdk_extracted: $(TOP_DIR)/sdk/.extracted
+
+$(TOP_DIR)/sdk/.extracted: $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip
+	mkdir -p "$(dir $@)"
+	(cd "$(dir $@)" && unzip $< esp_iot_sdk_v$(SDK_VER)/lib/* esp_iot_sdk_v$(SDK_VER)/ld/eagle.rom.addr.v6.ld esp_iot_sdk_v$(SDK_VER)/include/* )
+	rm -f $(SDK_DIR)/lib/liblwip.a
+	touch $@
+
+$(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip:
+	mkdir -p "$(dir $@)"
+	wget --tries=10 --timeout=15 --waitretry=30 --read-timeout=20 --retry-connrefused --continue http://bbs.espressif.com/download/file.php?id=$(SDK_FILE_ID) -O $@
 
 clean:
 	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clean;)
 	$(RM) -r $(ODIR)/$(TARGET)/$(FLAVOR)
+	$(RM) -r "$(TOP_DIR)/sdk"
 
 clobber: $(SPECIAL_CLOBBER)
 	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clobber;)
