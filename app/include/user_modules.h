@@ -41,6 +41,7 @@
 #define LUA_USE_MODULES_INTELLIGENTLI
 #define LUA_USE_MODULES_S4PP
 #define LUA_USE_MODULES_OTAUPGRADE
+#define LUA_USE_MODULES_LIS3MDL
 //#define LUA_USE_MODULES_TSL2561
 //#define LUA_USE_MODULES_SPI
 #define LUA_USE_MODULES_TMR
@@ -51,6 +52,9 @@
 //#define LUA_USE_MODULES_WS2801
 //#define LUA_USE_MODULES_WS2812
 
+#if defined(LUA_USE_MODULES_SPI) && defined(LUA_USE_MODULES_LIS3MDL)
+#error LIS3MDL and SPI modules cannot be used at the same time
+#endif
 
 #endif  /* LUA_CROSS_COMPILER */
 #endif	/* __USER_MODULES_H__ */
