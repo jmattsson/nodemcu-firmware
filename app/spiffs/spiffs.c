@@ -51,7 +51,7 @@ static void get_fs_start_and_size (uint32_t *phys_addr, uint32_t *phys_size)
 #else
   *phys_addr = platform_flash_get_first_free_block_address (NULL);
 #endif
-  *phys_addr += 0x3000;
+  *phys_addr += 0x3FFF;
   *phys_addr &= 0xFFFFC000;  // align to 4 sector.
 
 #if defined(SPIFFS_FIXED_SIZE)

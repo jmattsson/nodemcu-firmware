@@ -1,3 +1,4 @@
+#include "module.h"
 #include "lua.h"
 #include "lauxlib.h"
 #ifdef LWIP_OPEN_SRC
@@ -717,15 +718,10 @@ err:
 }
 
 
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE s4pp_map[] =
+static const LUA_REG_TYPE s4pp_map[] =
 {
   { LSTRKEY("upload"), LFUNCVAL(s4pp_do_upload) },
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_s4pp (lua_State *L)
-{
-  LREGISTER(L, AUXLIB_S4PP, s4pp_map);
-}
+NODEMCU_MODULE(S4PP, "s4pp", s4pp_map, NULL);

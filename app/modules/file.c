@@ -1,11 +1,8 @@
 // Module for interfacing with file system
 
-#include "lua.h"
-#include "lualib.h"
+#include "module.h"
 #include "lauxlib.h"
 #include "platform.h"
-#include "auxmods.h"
-#include "lrotable.h"
 
 #include "c_types.h"
 #include "flash_fs.h"
@@ -178,7 +175,7 @@ static int file_rename( lua_State* L )
 // Lua: fsinfo()
 static int file_fsinfo( lua_State* L )
 {
-  uint32_t total, used;
+  u32_t total, used;
   SPIFFS_info(&fs, &total, &used);
   NODE_DBG("total: %d, used:%d\n", total, used);
   if(total>0x7FFFFFFF || used>0x7FFFFFFF || used > total)
@@ -307,43 +304,25 @@ static int file_writeline( lua_State* L )
 }
 
 // Module function map
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE file_map[] = 
-{
-  { LSTRKEY( "list" ), LFUNCVAL( file_list ) },
-  { LSTRKEY( "open" ), LFUNCVAL( file_open ) },
-  { LSTRKEY( "close" ), LFUNCVAL( file_close ) },
-  { LSTRKEY( "write" ), LFUNCVAL( file_write ) },
+static const LUA_REG_TYPE file_map[] = {
+  { LSTRKEY( "list" ),      LFUNCVAL( file_list ) },
+  { LSTRKEY( "open" ),      LFUNCVAL( file_open ) },
+  { LSTRKEY( "close" ),     LFUNCVAL( file_close ) },
+  { LSTRKEY( "write" ),     LFUNCVAL( file_write ) },
   { LSTRKEY( "writeline" ), LFUNCVAL( file_writeline ) },
-  { LSTRKEY( "read" ), LFUNCVAL( file_read ) },
-  { LSTRKEY( "readline" ), LFUNCVAL( file_readline ) },
-  { LSTRKEY( "format" ), LFUNCVAL( file_format ) },
-#if defined(BUILD_WOFS)
-#elif defined(BUILD_SPIFFS)
-  { LSTRKEY( "remove" ), LFUNCVAL( file_remove ) },
-  { LSTRKEY( "seek" ), LFUNCVAL( file_seek ) },
-  { LSTRKEY( "flush" ), LFUNCVAL( file_flush ) },
-  // { LSTRKEY( "check" ), LFUNCVAL( file_check ) },
-  { LSTRKEY( "rename" ), LFUNCVAL( file_rename ) },
-  { LSTRKEY( "fsinfo" ), LFUNCVAL( file_fsinfo ) },
-  { LSTRKEY( "fscfg" ),  LFUNCVAL( file_fscfg ) },
-#endif
-  
-#if LUA_OPTIMIZE_MEMORY > 0
-
+  { LSTRKEY( "read" ),      LFUNCVAL( file_read ) },
+  { LSTRKEY( "readline" ),  LFUNCVAL( file_readline ) },
+  { LSTRKEY( "format" ),    LFUNCVAL( file_format ) },
+#if defined(BUILD_SPIFFS) && !defined(BUILD_WOFS)
+  { LSTRKEY( "remove" ),    LFUNCVAL( file_remove ) },
+  { LSTRKEY( "seek" ),      LFUNCVAL( file_seek ) },
+  { LSTRKEY( "flush" ),     LFUNCVAL( file_flush ) },
+//{ LSTRKEY( "check" ),     LFUNCVAL( file_check ) },
+  { LSTRKEY( "rename" ),    LFUNCVAL( file_rename ) },
+  { LSTRKEY( "fsinfo" ),    LFUNCVAL( file_fsinfo ) },
+  { LSTRKEY( "fscfg" ),     LFUNCVAL( file_fscfg ) },
 #endif
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_file( lua_State *L )
-{
-#if LUA_OPTIMIZE_MEMORY > 0
-  return 0;
-#else // #if LUA_OPTIMIZE_MEMORY > 0
-  luaL_register( L, AUXLIB_FILE, file_map );
-  // Add constants
-
-  return 1;
-#endif // #if LUA_OPTIMIZE_MEMORY > 0  
-}
+NODEMCU_MODULE(FILE, "file", file_map, NULL);

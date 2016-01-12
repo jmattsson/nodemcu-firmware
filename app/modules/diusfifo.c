@@ -1,5 +1,6 @@
 // Module for DIUS sample FIFO storage
 
+#include "module.h"
 #include "lauxlib.h"
 #include "user_modules.h"
 #include "user_config.h"
@@ -179,10 +180,7 @@ static int diusfifo_maxval(lua_State *L)
 }
 
 
-// Module function map
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE diusfifo_map[] =
+static const LUA_REG_TYPE diusfifo_map[] =
 {
   { LSTRKEY("prepare"),             LFUNCVAL(diusfifo_prepare) },
   { LSTRKEY("ready"),               LFUNCVAL(diusfifo_ready) },
@@ -197,12 +195,4 @@ const LUA_REG_TYPE diusfifo_map[] =
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_diusfifo (lua_State *L)
-{
-#if LUA_OPTIMIZE_MEMORY > 0
-  return 0;
-#else
-  luaL_register (L, AUXLIB_DIUSFIFO, diusfifo_map);
-  return 1;
-#endif
-}
+NODEMCU_MODULE(DIUSFIFO, "diusfifo", diusfifo_map, NULL);

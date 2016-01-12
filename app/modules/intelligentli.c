@@ -29,7 +29,7 @@
  */
 #include "lua.h"
 #include "lauxlib.h"
-#include "auxmods.h"
+#include "module.h"
 #ifdef LWIP_OPEN_SRC
 #include "lwip/ip_addr.h"
 #else
@@ -374,16 +374,11 @@ static int intelligentli_post (lua_State *L)
 }
 
 
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE intelligentli_map[] =
+static const LUA_REG_TYPE intelligentli_map[] =
 {
   { LSTRKEY( "config" ), LFUNCVAL( intelligentli_config ) },
   { LSTRKEY( "post"   ), LFUNCVAL( intelligentli_post   ) },
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_intelligentli (lua_State *L)
-{
-  LREGISTER (L, AUXLIB_INTELLIGENTLI, intelligentli_map);
-}
+NODEMCU_MODULE(INTELLIGENTLI, "intelligentli", intelligentli_map, NULL);

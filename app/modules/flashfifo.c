@@ -1,5 +1,6 @@
 // Module for FLASH sample FIFO storage
 
+#include "module.h"
 #include "lauxlib.h"
 #include "user_modules.h"
 #include "user_config.h"
@@ -145,10 +146,7 @@ static int flashfifo_maxval(lua_State *L)
 }
 
 
-// Module function map
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE flashfifo_map[] =
+static const LUA_REG_TYPE flashfifo_map[] =
 {
   { LSTRKEY("prepare"),             LFUNCVAL(flashfifo_prepare) },
   { LSTRKEY("ready"),               LFUNCVAL(flashfifo_ready) },
@@ -163,12 +161,4 @@ const LUA_REG_TYPE flashfifo_map[] =
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_flashfifo (lua_State *L)
-{
-#if LUA_OPTIMIZE_MEMORY > 0
-  return 0;
-#else
-  luaL_register (L, AUXLIB_FLASHFIFO, flashfifo_map);
-  return 1;
-#endif
-}
+NODEMCU_MODULE(FLASHFIFO, "flashfifo", flashfifo_map, NULL);

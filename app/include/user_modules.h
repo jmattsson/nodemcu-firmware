@@ -12,9 +12,7 @@
 #define LUA_USE_BUILTIN_DEBUG_MINIMAL // for debug.getregistry() and debug.traceback()
 
 #ifndef LUA_CROSS_COMPILER
-#define LUA_USE_MODULES
 
-#ifdef LUA_USE_MODULES
 #define LUA_USE_MODULES_ADC
 #define LUA_USE_MODULES_BIT
 //#define LUA_USE_MODULES_BMP085
@@ -30,9 +28,9 @@
 //#define LUA_USE_MODULES_MQTT
 #define LUA_USE_MODULES_NET
 #define LUA_USE_MODULES_NODE
-#define LUA_USE_MODULES_OW
+//#define LUA_USE_MODULES_OW
 //#define LUA_USE_MODULES_PWM
-#define LUA_USE_MODULES_RC
+//#define LUA_USE_MODULES_RC
 #define LUA_USE_MODULES_RTCMEM
 #define LUA_USE_MODULES_RTCTIME
 //#define LUA_USE_MODULES_RTCFIFO
@@ -45,7 +43,7 @@
 #define LUA_USE_MODULES_OTAUPGRADE
 //#define LUA_USE_MODULES_TSL2561
 //#define LUA_USE_MODULES_SPI
-//#define LUA_USE_MODULES_TMR
+#define LUA_USE_MODULES_TMR
 //#define LUA_USE_MODULES_U8G
 #define LUA_USE_MODULES_UART
 //#define LUA_USE_MODULES_UCG
@@ -53,7 +51,6 @@
 //#define LUA_USE_MODULES_WS2801
 //#define LUA_USE_MODULES_WS2812
 
-#endif /* LUA_USE_MODULES */
-#endif
 
+#endif  /* LUA_CROSS_COMPILER */
 #endif	/* __USER_MODULES_H__ */

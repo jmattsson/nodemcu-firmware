@@ -30,6 +30,7 @@
  *
  * @author Johny Mattsson <jmattsson@dius.com.au>
  */
+#include "module.h"
 #include "lauxlib.h"
 #include "platform.h"
 #include "user_modules.h"
@@ -314,10 +315,7 @@ static int lotaupgrade_info (lua_State *L)
   return 1;
 }
 
-// Module function map
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE otaupgrade_map[] =
+static const LUA_REG_TYPE otaupgrade_map[] =
 {
   { LSTRKEY( "commence" ), LFUNCVAL( lotaupgrade_commence ) },
   { LSTRKEY( "write" ),    LFUNCVAL( lotaupgrade_write) },
@@ -328,8 +326,5 @@ const LUA_REG_TYPE otaupgrade_map[] =
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_otaupgrade( lua_State *L )
-{
-  LREGISTER ( L, AUXLIB_OTAUPGRADE, otaupgrade_map );
-}
+NODEMCU_MODULE(OTAUPGRADE, "otaupgrade", otaupgrade_map, NULL);
 #endif /* LUA_USE_MODULES_OTAUPGRADE */

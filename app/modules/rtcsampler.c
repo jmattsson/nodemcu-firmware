@@ -5,7 +5,7 @@
 //  that act as a boot loader. It also provides a method to deep-sleep
 //  until a next scheduled sample in a convenient manner)
 
-
+#include "module.h"
 #include "lauxlib.h"
 #include "user_modules.h"
 #include "rtc/rtctime.h"
@@ -82,10 +82,7 @@ static int rtcsampler_dsleep_until_sample (lua_State *L)
 }
 #endif
 
-// Module function map
-#define MIN_OPT_LEVEL 2
-#include "lrodefs.h"
-const LUA_REG_TYPE rtcsampler_map[] =
+static const LUA_REG_TYPE rtcsampler_map[] =
 {
   { LSTRKEY("prepare"),             LFUNCVAL(rtcsampler_prepare) },
   { LSTRKEY("ready"),               LFUNCVAL(rtcsampler_ready) },
@@ -96,12 +93,4 @@ const LUA_REG_TYPE rtcsampler_map[] =
   { LNILKEY, LNILVAL }
 };
 
-LUALIB_API int luaopen_rtcsampler (lua_State *L)
-{
-#if LUA_OPTIMIZE_MEMORY > 0
-  return 0;
-#else
-  luaL_register (L, AUXLIB_RTCSAMPLER, rtcsampler_map);
-  return 1;
-#endif
-}
+NODEMCU_MODULE(RTCSAMPLER, "rtcsampler", rtcsampler_map, NULL);
