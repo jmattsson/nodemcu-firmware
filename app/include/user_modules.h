@@ -52,6 +52,7 @@
 //#define LUA_USE_MODULES_WS2801
 //#define LUA_USE_MODULES_WS2812
 //#define LUA_USE_MODULES_LOCP
+//#define LUA_USE_MODULES_MACFRAME
 
 #if defined(LUA_USE_MODULES_SPI) && defined(LUA_USE_MODULES_LIS3MDL)
 #error LIS3MDL and SPI modules cannot be used at the same time
