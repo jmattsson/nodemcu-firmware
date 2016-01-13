@@ -55,6 +55,8 @@ static int locp_register (lua_State *L)
     return luaL_error (L, "expected callback arg");
 
   luaL_unref (L, LUA_REGISTRYINDEX, cb_ref);
+
+  lua_pushvalue (L, 1);
   cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
   wifi_register_rfid_locp_recv_cb (locp_cb);
