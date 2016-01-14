@@ -4,7 +4,7 @@ build: $(addsuffix .bin,$(addprefix bin/nodemcu-boot-, 9600 74880 115200 silent 
 CC=xtensa-lx106-elf-cc
 ESPTOOL?=esptool.py
 
-SDKDIR=../sdk/esp_iot_sdk_v1.5.0
+SDKDIR=../sdk/esp_iot_sdk_v1.5.1
 
 CFLAGS=-std=c99 -Os -Wall -Wextra -ffunction-sections -fdata-sections -mtext-section-literals -fomit-frame-pointer -mlongcalls -I$(SDKDIR)/include
 
