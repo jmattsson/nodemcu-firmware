@@ -10,6 +10,7 @@
 #include "mem.h"
 #include "../crypto/sha2.h"
 #include "../crypto/digests.h"
+#include "stdlib.h"
 
 typedef int8_t (*conn_function_t)(struct espconn *conn);
 typedef int8_t (*send_function_t)(struct espconn *conn, const void *data, uint16_t len);

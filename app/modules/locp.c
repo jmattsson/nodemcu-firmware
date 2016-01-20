@@ -32,6 +32,7 @@
  */
 #include "module.h"
 #include "lauxlib.h"
+#include "user_interface.h"
 
 static int cb_ref = LUA_NOREF;
 

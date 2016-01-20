@@ -32,6 +32,7 @@
  */
 #include "module.h"
 #include "lauxlib.h"
+#include "user_interface.h"
 
 static int cb_ref = LUA_NOREF;
 
@@ -66,7 +67,8 @@ static int raw80211_send (lua_State *L)
 
   int sys_seq = luaL_optinteger (L, 3, 0);
 
-  lua_pushinteger (L, wifi_send_pkt_freedom (frame, len, sys_seq));
+  // CAUTION: const-cast here
+  lua_pushinteger (L, wifi_send_pkt_freedom ((void *)frame, len, sys_seq));
   return 1;
 }
 
