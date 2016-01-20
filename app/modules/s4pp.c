@@ -151,6 +151,7 @@ static void cleanup (s4pp_userdata *sud)
   lua_State *L = sud->L;
 
   luaL_unref (L, LUA_REGISTRYINDEX, sud->cb_ref);
+  luaL_unref (L, LUA_REGISTRYINDEX, sud->token_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->user_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->key_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->iter_ref);
