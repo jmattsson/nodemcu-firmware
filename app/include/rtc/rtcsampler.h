@@ -35,6 +35,12 @@ INTERNAL static inline void rtc_sampler_set_magic(void)
   rtc_mem_write(RTC_SAMPLER_MAGIC_POS,RTC_SAMPLER_MAGIC);
 }
 
+INTERNAL static inline void rtc_sampler_unset_magic(void)
+{
+  rtc_mem_write(RTC_SAMPLER_MAGIC_POS,0);
+}
+
+
 
 
 API static inline uint32_t rtc_get_samples_to_take(void)
@@ -77,12 +83,16 @@ API static inline void rtc_sampler_deep_sleep_until_sample(uint32_t min_sleep_us
 
 API static inline void rtc_sampler_prepare(uint32_t samples_per_boot, uint32_t us_per_sample, uint32_t us_rand)
 {
-
   rtc_mem_write(RTC_SAMPLESPERBOOT_POS,samples_per_boot);
   rtc_mem_write(RTC_ALIGNMENT_POS,us_per_sample);
   rtc_mem_write(RTC_RANDOMISE_POS,us_rand);
   rtc_put_samples_to_take(0);
   rtc_sampler_set_magic();
+}
+
+API static inline void rtc_sampler_trash(void)
+{
+  rtc_sampler_unset_magic();
 }
 
 

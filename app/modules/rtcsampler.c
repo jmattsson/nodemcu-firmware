@@ -46,6 +46,13 @@ static int rtcsampler_prepare (lua_State *L)
 }
 
 
+// rtcsampler.trash ()
+static int rtcsampler_trash (lua_State *L)
+{
+  rtc_sampler_trash();
+  return 0;
+}
+
 // ready = rtcsampler.ready ()
 static int rtcsampler_ready (lua_State *L)
 {
@@ -91,6 +98,7 @@ static int rtcsampler_dsleep_until_sample (lua_State *L)
 static const LUA_REG_TYPE rtcsampler_map[] =
 {
   { LSTRKEY("prepare"),             LFUNCVAL(rtcsampler_prepare) },
+  { LSTRKEY("trash"),               LFUNCVAL(rtcsampler_trash) },
   { LSTRKEY("ready"),               LFUNCVAL(rtcsampler_ready) },
 #ifdef LUA_USE_MODULES_RTCTIME
   { LSTRKEY("dsleep_until_sample"), LFUNCVAL(rtcsampler_dsleep_until_sample) },
