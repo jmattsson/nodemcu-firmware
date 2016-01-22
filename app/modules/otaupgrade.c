@@ -35,6 +35,7 @@
 #include "platform.h"
 #include "user_modules.h"
 #include "flash_api.h"
+#include "user_interface.h"
 
 /* Ensure we don't override Cache_Read_Enable() unintentionally, as that would
  * be Rather Bad(tm) */

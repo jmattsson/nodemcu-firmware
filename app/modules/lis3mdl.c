@@ -36,6 +36,7 @@
 #include "driver/lis3mdl.h"
 #include "eagle_soc.h"
 #include "module.h"
+#include "rom.h"
 
 // ******* C API functions *************
 #define READ_ACCESS  1
