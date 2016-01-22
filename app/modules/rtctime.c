@@ -74,9 +74,9 @@ void rtctime_deep_sleep_us (uint32_t us)
   rtc_time_deep_sleep_us (us);
 }
 
-void rtctime_deep_sleep_until_aligned_us (uint32_t align_us, uint32_t min_us)
+void rtctime_deep_sleep_until_aligned_us (uint32_t align_us, uint32_t min_us, uint32_t rand_us)
 {
-  rtc_time_deep_sleep_until_aligned (align_us, min_us);
+  rtc_time_deep_sleep_until_aligned (align_us, min_us,rand_us);
 }
 
 
@@ -139,8 +139,12 @@ static int rtctime_dsleep_aligned (lua_State *L)
 
   uint32_t align_us = luaL_checknumber (L, 1);
   uint32_t min_us = luaL_checknumber (L, 2);
+  uint32_t rand_us = 0;
+  if (lua_isnumber (L, 3))
+    rand_us = lua_tonumber (L, 3);
+
   do_sleep_opt (L, 3);
-  rtctime_deep_sleep_until_aligned_us (align_us, min_us); // does not return
+  rtctime_deep_sleep_until_aligned_us (align_us, min_us, rand_us); // does not return
   return 0;
 }
 

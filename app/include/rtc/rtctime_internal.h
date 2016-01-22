@@ -461,7 +461,18 @@ static inline void rtc_time_deep_sleep_us(uint32_t us)
   rtc_time_enter_deep_sleep_us(us);
 }
 
-static inline void rtc_time_deep_sleep_until_aligned(uint32_t align, uint32_t min_sleep_us)
+static inline uint32_t make_rand_us(uint32_t rand_us)
+{
+  if (rand_us==0)
+    return 0;
+  uint32_t r=*((uint32_t*)0x3FF20E44); // 32 random bits
+
+  if ((rand_us&(rand_us-1))==0) // power of 2
+    return r&(rand_us-1);
+  return r%(rand_us+1);
+}
+
+static inline void rtc_time_deep_sleep_until_aligned(uint32_t align, uint32_t min_sleep_us, uint32_t rand_us)
 {
   uint64_t now=rtc_time_get_now_us_adjusted();
   uint64_t then=now+min_sleep_us;
@@ -471,7 +482,7 @@ static inline void rtc_time_deep_sleep_until_aligned(uint32_t align, uint32_t mi
     then+=align-1;
     then-=(then%align);
   }
-  rtc_time_deep_sleep_us(then-now);
+  rtc_time_deep_sleep_us(then-now+make_rand_us(rand_us));
 }
 
 static inline void rtc_time_reset(bool clear_cali)

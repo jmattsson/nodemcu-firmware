@@ -55,6 +55,6 @@ void rtctime_gettimeofday (struct rtc_timeval *tv);
 void rtctime_settimeofday (const struct rtc_timeval *tv);
 bool rtctime_have_time (void);
 void rtctime_deep_sleep_us (uint32_t us);
-void rtctime_deep_sleep_until_aligned_us (uint32_t align_us, uint32_t min_us);
+void rtctime_deep_sleep_until_aligned_us (uint32_t align_us, uint32_t min_us, uint32_t rand_us);
 
 #endif

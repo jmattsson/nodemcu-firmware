@@ -7,10 +7,7 @@
 //
 // 0: magic
 // 1: measurement alignment, in microseconds
-// 2: timestamp for next sample (seconds). For sensors which sense during the sleep phase. Set to
-//    0 to indicate no sample waiting. Simply do not use for sensors which deliver values prior to
-//    deep sleep.
-
+// 2: randomisation of aligned sleep, in us
 // 3: Number of samples to take before doing a "real" boot. Decremented as samples are obtained
 // 4: Reload value for (10). Needs to be applied by the firmware in the real boot (rtc_restart_samples_to_take())
 
@@ -19,7 +16,7 @@
 
 #define RTC_SAMPLER_MAGIC_POS  (RTC_SAMPLER_BASE+0)
 #define RTC_ALIGNMENT_POS      (RTC_SAMPLER_BASE+1)
-#define RTC_TIMESTAMP_POS      (RTC_SAMPLER_BASE+2)
+#define RTC_RANDOMISE_POS      (RTC_SAMPLER_BASE+2)
 #define RTC_SAMPLESTOTAKE_POS  (RTC_SAMPLER_BASE+3)
 #define RTC_SAMPLESPERBOOT_POS (RTC_SAMPLER_BASE+4)
 
@@ -73,15 +70,17 @@ API static inline uint8_t rtc_sampler_check_magic(void)
 API static inline void rtc_sampler_deep_sleep_until_sample(uint32_t min_sleep_us)
 {
   uint32_t align=rtc_mem_read(RTC_ALIGNMENT_POS);
-  RTCTIME_SLEEP_ALIGNED(align,min_sleep_us);
+  uint32_t rand_us=rtc_mem_read(RTC_RANDOMISE_POS);
+  RTCTIME_SLEEP_ALIGNED(align,min_sleep_us,rand_us);
 }
 
 
-API static inline void rtc_sampler_prepare(uint32_t samples_per_boot, uint32_t us_per_sample)
+API static inline void rtc_sampler_prepare(uint32_t samples_per_boot, uint32_t us_per_sample, uint32_t us_rand)
 {
 
   rtc_mem_write(RTC_SAMPLESPERBOOT_POS,samples_per_boot);
   rtc_mem_write(RTC_ALIGNMENT_POS,us_per_sample);
+  rtc_mem_write(RTC_RANDOMISE_POS,us_rand);
   rtc_put_samples_to_take(0);
   rtc_sampler_set_magic();
 }

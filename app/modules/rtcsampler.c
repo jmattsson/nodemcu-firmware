@@ -17,6 +17,7 @@ static int rtcsampler_prepare (lua_State *L)
 {
   uint32_t interval_us = 0;
   uint32_t samples_per_boot=0;
+  uint32_t random_us=0;
 
   if (lua_istable (L, 1))
   {
@@ -30,12 +31,17 @@ static int rtcsampler_prepare (lua_State *L)
     if (lua_isnumber (L, -1))
       samples_per_boot = lua_tonumber (L, -1);
     lua_pop (L, 1);
+
+    lua_getfield (L, 1, "random_us");
+    if (lua_isnumber (L, -1))
+      random_us = lua_tonumber (L, -1);
+    lua_pop (L, 1);
 #endif
   }
   else if (!lua_isnone (L, 1))
     return luaL_error (L, "expected table as arg #1");
 
-  rtc_sampler_prepare (samples_per_boot, interval_us);
+  rtc_sampler_prepare (samples_per_boot, interval_us,random_us);
   return 0;
 }
 
