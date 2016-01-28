@@ -864,7 +864,6 @@ static void enduser_setup_http_recvcb(void *arg, char *data, unsigned short data
     }
     else if (c_strncmp(data + 4, "/update?", 8) == 0)
     {
-      c_printf("%s\n", data);
       switch (enduser_setup_http_handle_credentials(data, data_len))
       {
         case 0:
