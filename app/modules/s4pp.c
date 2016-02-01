@@ -24,14 +24,16 @@ typedef struct
 
 static const esp_funcs_t esp_plain = {
   .connect = espconn_connect,
+  // FIXME: need to post the disconnect
   .disconnect = espconn_disconnect,
-  .send = (send_function_t)espconn_sent
+  .send = (send_function_t)espconn_send
 };
 
 static const esp_funcs_t esp_secure = {
   .connect = espconn_secure_connect,
+  // FIXME: need to post the disconnect
   .disconnect = espconn_secure_disconnect,
-  .send = (send_function_t)espconn_secure_sent
+  .send = (send_function_t)espconn_secure_send
 };
 
 typedef struct
@@ -219,7 +221,7 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
   int err = sud->funcs->send (&sud->conn, (uint8_t *)auth, alen);
   lua_pop (L, 1);
   if (err)
-    goto_err_with_msg (sud->L, "send failed: %d", err);
+    goto_err_with_msg (sud->L, "auth send failed: %d", err);
 
   sud->state = S4PP_AUTHED;
   prepare_seq_hmac (sud);
@@ -523,9 +525,16 @@ static void on_recv (void *arg, char *data, uint16_t len)
     char *end = nl ? nl : data + len -1;
     uint16_t dlen = (end - data);
     uint16_t newlen = sud->recv_len + dlen;
-    sud->recv_buf = (char *)os_realloc (sud->recv_buf, newlen);
-    if (!sud->recv_buf)
+    char *p = (char *)os_realloc (sud->recv_buf, newlen);
+    if (!p)
+    {
+      os_free (sud->recv_buf);
+      sud->recv_buf = 0;
+      sud->recv_len = 0;
       goto_err_with_msg (sud->L, "no memory for recv buffer");
+    }
+    else
+      sud->recv_buf = p;
     os_memcpy (sud->recv_buf + sud->recv_len, data, newlen - sud->recv_len);
     sud->recv_len = newlen;
     data += dlen;
@@ -563,6 +572,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
     if (!sud->recv_buf)
       goto_err_with_msg (sud->L, "no memory for recv buffer");
     sud->recv_len = len;
+    os_memcpy (sud->recv_buf, data, len);
   }
   return;
 
