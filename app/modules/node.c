@@ -26,6 +26,7 @@
 #include "flash_fs.h"
 #include "user_version.h"
 #include "rom.h"
+#include "mem.h"
 
 #define CPU80MHZ 80
 #define CPU160MHZ 160
@@ -145,6 +146,34 @@ static int node_heap( lua_State* L )
   return 1;
 }
 
+static uint32_t get_max_alloc(void)
+{
+  uint32_t size=8;
+  void* x;
+
+  while ((x=os_malloc(size)))
+  {
+    os_free(x);
+    size<<=1;
+  }
+  uint32_t off=size>>2;
+  while (off)
+  {
+    if ((x=os_malloc(size-off)))
+      os_free(x);
+    else
+      size-=off;
+    off>>=1;
+  }
+  return size;
+}
+
+static int node_maxalloc( lua_State* L )
+{
+  uint32_t sz = get_max_alloc();
+  lua_pushinteger(L, sz);
+  return 1;
+}
 static lua_State *gL = NULL;
 
 #ifdef DEVKIT_VERSION_0_9
@@ -567,6 +596,7 @@ static const LUA_REG_TYPE node_map[] =
   { LSTRKEY( "flashid" ), LFUNCVAL( node_flashid ) },
   { LSTRKEY( "flashsize" ), LFUNCVAL( node_flashsize) },
   { LSTRKEY( "heap" ), LFUNCVAL( node_heap ) },
+  { LSTRKEY( "maxalloc" ), LFUNCVAL( node_maxalloc ) },
 #ifdef DEVKIT_VERSION_0_9
   { LSTRKEY( "key" ), LFUNCVAL( node_key ) },
   { LSTRKEY( "led" ), LFUNCVAL( node_led ) },
