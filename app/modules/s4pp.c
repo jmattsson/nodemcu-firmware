@@ -663,7 +663,7 @@ static int s4pp_do_upload (lua_State *L)
   s4pp_userdata *sud = (s4pp_userdata *)os_zalloc (sizeof (s4pp_userdata));
   if (!sud)
     err_out ("no memory");
-  sud->buffer = strbuffer_create (PAYLOAD_LIMIT);
+  sud->buffer = strbuffer_create (PAYLOAD_LIMIT + 128); // A bit of headroom
   if (!sud->buffer)
     err_out ("no memory");
   sud->L = L;
