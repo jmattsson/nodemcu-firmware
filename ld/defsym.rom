@@ -8,3 +8,4 @@
 --defsym=memcpy=ets_memcpy
 --defsym=memmove=ets_memmove
 --defsym=memset=ets_memset
+--defsym=vsnprintf=ets_vsnprintf

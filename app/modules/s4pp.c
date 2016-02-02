@@ -10,7 +10,12 @@
 #include "mem.h"
 #include "../crypto/sha2.h"
 #include "../crypto/digests.h"
-#include "stdlib.h"
+#include "strbuffer.h"
+
+#define PAYLOAD_LIMIT 1400
+
+#define lstrbuffer_append(x,...) do { if (!strbuffer_append(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
+#define lstrbuffer_add(x,...) do { if (!strbuffer_add(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
 
 typedef int8_t (*conn_function_t)(struct espconn *conn);
 typedef int8_t (*send_function_t)(struct espconn *conn, const void *data, uint16_t len);
@@ -39,6 +44,7 @@ static const esp_funcs_t esp_secure = {
 typedef struct
 {
   lua_State *L;
+  strbuffer_t *buffer;
   struct espconn conn;
   const esp_funcs_t *funcs;
   ip_addr_t dns;
@@ -117,6 +123,12 @@ static void update_hmac (s4pp_userdata *sud)
   SHA256_Update (&sud->ctx, data, len);
 }
 
+static void update_hmac_from_buffer (s4pp_userdata *sud)
+{
+  size_t len;
+  const char *data = strbuffer_str (sud->buffer, &len);
+  SHA256_Update (&sud->ctx, data, len);
+}
 
 static void init_hmac (s4pp_userdata *sud)
 {
@@ -127,7 +139,7 @@ static void init_hmac (s4pp_userdata *sud)
 }
 
 
-static void push_final_hmac_hex (s4pp_userdata *sud)
+static void append_final_hmac_hex (s4pp_userdata *sud)
 {
   uint8_t digest[SHA256_DIGEST_LENGTH*2];
   SHA256_Final (digest, &sud->ctx);
@@ -138,7 +150,7 @@ static void push_final_hmac_hex (s4pp_userdata *sud)
   SHA256_Update (&sud->ctx, digest, SHA256_DIGEST_LENGTH);
   SHA256_Final (digest, &sud->ctx);
   crypto_encode_asciihex (digest, SHA256_DIGEST_LENGTH, digest);
-  lua_pushlstring (sud->L, digest, sizeof (digest));
+  lstrbuffer_append (sud->buffer, digest, sizeof (digest));
 }
 
 
@@ -163,6 +175,8 @@ static void cleanup (s4pp_userdata *sud)
   luaL_unref (L, LUA_REGISTRYINDEX, sud->err_ref);
 
   espconn_delete (&sud->conn);
+
+  strbuffer_free (sud->buffer);
 
   os_free (sud->conn.proto.tcp);
   os_free (sud->recv_buf);
@@ -191,6 +205,7 @@ static void prepare_seq_hmac (s4pp_userdata *sud)
 static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
 {
   lua_State *L = sud->L;
+
   lua_checkstack (L, 5);
   lua_pushlstring (L, token, len);
   sud->token_ref = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -268,7 +283,7 @@ static void get_optional_field (lua_State *L, int table, const char *key, const 
 
 
 // top of stack = { name=..., unit=..., unitdiv=... }
-static void prepare_dict (s4pp_userdata *sud, size_t *sz_estimate)
+static void prepare_dict (s4pp_userdata *sud)
 {
   lua_State *L = sud->L;
   int sample_table = lua_gettop (L);
@@ -292,13 +307,15 @@ static void prepare_dict (s4pp_userdata *sud, size_t *sz_estimate)
   lua_pushliteral (L, "\n");
   lua_concat (L, 9); // DICT:<idx>,<unit>,<unitdiv>,<name>\n
   size_t len;
-  lua_tolstring (L, -1, &len);
-  *sz_estimate += len;
+  const char *str = lua_tolstring (L, -1, &len);
+
+  lstrbuffer_append (sud->buffer, str, len);
+  lua_pop (L, 1);
 }
 
 
 // top of stack = { time=..., value=... }
-static bool prepare_data (s4pp_userdata *sud, int idx, size_t *sz_estimate)
+static bool prepare_data (s4pp_userdata *sud, int idx)
 {
   lua_State *L = sud->L;
   int sample_table = lua_gettop (L);
@@ -323,8 +340,10 @@ static bool prepare_data (s4pp_userdata *sud, int idx, size_t *sz_estimate)
 
   lua_concat (L, 6);
   size_t len;
-  lua_tolstring (L, -1, &len);
-  *sz_estimate += len;
+  const char *str = lua_tolstring (L, -1, &len);
+
+  lstrbuffer_append (sud->buffer, str, len);
+  lua_pop (L, 1);
 
   return true;
 failed:
@@ -336,17 +355,11 @@ failed:
 static void progress_work (s4pp_userdata *sud)
 {
   lua_State *L = sud->L;
-  int concat_n = 0;
-  size_t sz_estimate = 0;
   switch (sud->state)
   {
     case S4PP_AUTHED:
     {
-      lua_pushliteral (L, "SEQ:");
-      lua_pushnumber (L, sud->next_seq++);
-      lua_pushliteral (L, ",0,1,0\n"); // seq:N time:0 timediv:1 datafmt:0
-      concat_n = 3;
-      sz_estimate = 12;
+      lstrbuffer_add (sud->buffer, "SEQ:%u,0,1,0\n", sud->next_seq++); // seq:N time:0 timediv:1 datafmt:0
       sud->next_idx = 0;
       sud->n_sent = 0;
       sud->lasttime = 0;
@@ -358,7 +371,10 @@ static void progress_work (s4pp_userdata *sud)
     }
     case S4PP_BUFFERING:
     {
-      while (sz_estimate < 1400 && sud->state == S4PP_BUFFERING)
+      size_t sz_estimate;
+      while (strbuffer_str (sud->buffer, &sz_estimate) &&
+             sz_estimate < PAYLOAD_LIMIT &&
+             sud->state == S4PP_BUFFERING)
       {
         if (!lua_checkstack (L, 1))
           goto_err_with_msg (L, "out of stack");
@@ -384,32 +400,25 @@ static void progress_work (s4pp_userdata *sud)
             // send dict and/or data
             int idx = get_dict_idx (sud);
             if (idx == -2)
-            {
-              lua_pop (L, concat_n);
               goto_err_with_msg (L, "no 'name'");
-            }
             else if (idx == -1)
             {
               lua_pushvalue (L, -1); // store "copy" of sample for data round
               sud->work_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-              prepare_dict (sud, &sz_estimate);
+              prepare_dict (sud);
             }
             else
             {
-              if (!prepare_data (sud, idx, &sz_estimate))
-              {
-                lua_pop (L, concat_n);
+              if (!prepare_data (sud, idx))
                 goto_err_with_msg (L, "no 'time' or 'value'");
-              }
               ++sud->n_sent;
             }
-            lua_remove (L, -2); // drop table (-1 is actual string we want)
-            ++concat_n;
+            lua_pop (L, 1); // drop table
           }
           else if (lua_isnoneornil (L, -1))
           {
             sig = true;
-            lua_pop (L, 1);
+            lua_pop (L, 1); // TODO: check if this is ok with noneornil
             sud->end_of_data = true;
           }
           else
@@ -417,25 +426,22 @@ static void progress_work (s4pp_userdata *sud)
         }
         if (sig)
         {
-          lua_concat (L, concat_n);
-          update_hmac (sud);
-          lua_pushliteral (L, "SIG:");
-          push_final_hmac_hex (sud);
-          lua_pushliteral (L, "\n");
-          concat_n = 4;
+          update_hmac_from_buffer (sud);
+          lstrbuffer_add (sud->buffer, "SIG:");
+          append_final_hmac_hex (sud);
+          lstrbuffer_add (sud->buffer, "\n");
           sud->state = S4PP_COMMITTING;
         }
       }
 
-      lua_concat (L, concat_n);
       if (sud->state != S4PP_COMMITTING)
-        update_hmac (sud);
+        update_hmac_from_buffer (sud);
 
       size_t len;
-      const char *str = lua_tolstring (L, -1, &len);
-      int res = sud->funcs->send (&sud->conn, (uint8_t *)str, len);
+      char *str = strbuffer_str (sud->buffer, &len);
+      int res = sud->funcs->send (&sud->conn, str, len);
+      strbuffer_reset (sud->buffer);
 
-      lua_pop (L, 1);
       if (res != 0)
         goto_err_with_msg (L, "send failed: %d", res);
       break;
@@ -656,6 +662,9 @@ static int s4pp_do_upload (lua_State *L)
 
   s4pp_userdata *sud = (s4pp_userdata *)os_zalloc (sizeof (s4pp_userdata));
   if (!sud)
+    err_out ("no memory");
+  sud->buffer = strbuffer_create (PAYLOAD_LIMIT);
+  if (!sud->buffer)
     err_out ("no memory");
   sud->L = L;
   sud->cb_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->work_ref = sud->dict_ref = LUA_NOREF;
