@@ -36,6 +36,7 @@
 #include "user_modules.h"
 #include "flash_api.h"
 #include "user_interface.h"
+#include "mem.h"
 
 /* Ensure we don't override Cache_Read_Enable() unintentionally, as that would
  * be Rather Bad(tm) */
@@ -316,6 +317,36 @@ static int lotaupgrade_info (lua_State *L)
   return 1;
 }
 
+
+/* Lua: s = romcfg.read(offs, len) */
+static int lromcfg_read (lua_State *L)
+{
+  ensure_possible (L, IN_TEST_ALLOWED); /* only read if flash OTA formatted */
+
+  uint16_t offs = luaL_checkint (L, 1);
+  uint16_t len  = luaL_checkint (L, 2);
+
+  if ((offs + len) > FW_OFFS)
+    return luaL_error (L, "read outside romcfg area");
+
+  char *buffer = os_malloc (len);
+  if (!buffer)
+    return luaL_error (L, "out of mem");
+
+  if (!platform_flash_read (buffer, 1*MEGABYTE + offs, len))
+  {
+    os_free (buffer);
+    return luaL_error (L, "read error");
+  }
+
+  lua_pushlstring (L, buffer, len);
+
+  os_free (buffer);
+
+  return 1;
+}
+
+
 static const LUA_REG_TYPE otaupgrade_map[] =
 {
   { LSTRKEY( "commence" ), LFUNCVAL( lotaupgrade_commence ) },
@@ -327,5 +358,12 @@ static const LUA_REG_TYPE otaupgrade_map[] =
   { LNILKEY, LNILVAL }
 };
 
+static const LUA_REG_TYPE romcfg_map[] =
+{
+  { LSTRKEY( "read" ),     LFUNCVAL( lromcfg_read ) },
+  { LNILKEY, LNILVAL }
+};
+
 NODEMCU_MODULE(OTAUPGRADE, "otaupgrade", otaupgrade_map, NULL);
+NODEMCU_MODULE(ROMCFG, "romcfg", romcfg_map, NULL);
 #endif /* LUA_USE_MODULES_OTAUPGRADE */
