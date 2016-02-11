@@ -1443,8 +1443,6 @@ static int json_decode(lua_State *l)
     json_token_t token;
     size_t json_len;
 
-    luaL_argcheck(l, lua_gettop(l) == 1, 1, "expected 1 argument");
-
     json.cfg = json_fetch_config(l);
     json.data = luaL_checklstring(l, 1, &json_len);
     json.current_depth = 0;
