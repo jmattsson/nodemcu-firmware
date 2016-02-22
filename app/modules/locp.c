@@ -64,7 +64,7 @@ static int locp_register (lua_State *L)
 
   int ret = wifi_rfid_locp_recv_open ();
   if (ret != 0)
-    return luaL_error (L, "failed to start listening for LOCP frames: %u\n", ret);
+    return luaL_error (L, "failed to start listening for LOCP frames: %d\n", ret);
 
   return 0;
 }
