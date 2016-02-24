@@ -248,7 +248,7 @@ if __name__ == '__main__':
 
     elif args.operation == 'elf2ota':
         if args.output is None:
-            args.output = args.input + '-'
+            args.output = args.input + ".ota"
         e = ELFFile(args.input)
         image = ESPFirmwareImage()
         image.entrypoint = e.get_entry_point()
