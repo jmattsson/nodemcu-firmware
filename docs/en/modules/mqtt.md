@@ -71,7 +71,7 @@ Closes connection to the broker.
 none
 
 #### Returns
-`nil`
+`true` on success, `false` otherwise
 
 ## mqtt.client:connect()
 
@@ -83,12 +83,12 @@ Connects to the broker specified by the given host, port, and secure options.
 #### Parameters
 - `host` host, domain or IP (string)
 - `port` broker port (number), default 1883
-- `secure` 0/1 for `false`/`true`, default 0. [As per #539](https://github.com/nodemcu/nodemcu-firmware/issues/539#issuecomment-170298120) secure connections use TLS 1.2.
+- `secure` 0/1 for `false`/`true`, default 0. [As per #996](https://github.com/nodemcu/nodemcu-firmware/issues/996#issuecomment-178053308) secure connections use **TLS 1.1** with the following cipher suites: `TLS_RSA_WITH_AES_128_CBC_SHA`, `TLS_RSA_WITH_AES_256_CBC_SHA`, `TLS_RSA_WITH_RC4_128_SHA`, and `TLS_RSA_WITH_RC4_128_MD5`. 
 - `autoreconnect` 0/1 for `false`/`true`, default 0
 - `function(client)` call back function for when the connection was established
 
 #### Returns
-`nil`
+`true` on success, `false` otherwise
 
 ## mqtt.client:lwt()
 
@@ -135,19 +135,30 @@ Publishes a message.
 - `function(client)` optional callback fired when PUBACK received
 
 #### Returns
-`nil`
+`true` on success, `false` otherwise
 
 ## mqtt.client:subscribe()
 
 Subscribes to one or several topics.
 
 #### Syntax
-`mqtt:subscribe(topic, qos[, function(client, topic, message)])`
+`mqtt:subscribe(topic, qos[, function(client)])`
+`mqtt:subscribe(table[, function(client)])`
 
 #### Parameters
 - `topic` a [topic string](http://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices)
 - `qos` QoS subscription level, default 0
-- `function(client, topic, message)` optional callback fired when message received
+- `table` array of 'topic, qos' pairs to subscribe to
+- `function(client)` optional callback fired when subscription(s) succeeded
 
 #### Returns
-`nil`
+`true` on success, `false` otherwise
+
+#### Example
+```lua
+-- subscribe topic with qos = 0
+m:subscribe("/topic",0, function(conn) print("subscribe success") end)
+
+-- or subscribe multiple topic (topic/0, qos = 0; topic/1, qos = 1; topic2 , qos = 2)
+m:subscribe({["topic/0"]=0,["topic/1"]=1,topic2=2}, function(conn) print("subscribe success") end)
+```

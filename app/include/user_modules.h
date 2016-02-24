@@ -14,9 +14,11 @@
 #ifndef LUA_CROSS_COMPILER
 
 #define LUA_USE_MODULES_ADC
+//#define LUA_USE_MODULES_AM2320
 //#define LUA_USE_MODULES_APA102
 #define LUA_USE_MODULES_BIT
 //#define LUA_USE_MODULES_BMP085
+//#define LUA_USE_MODULES_BME280
 #define LUA_USE_MODULES_CJSON
 //#define LUA_USE_MODULES_COAP
 #define LUA_USE_MODULES_CRYPTO
@@ -39,6 +41,7 @@
 //#define LUA_USE_MODULES_FLASHFIFO // Note: These use a fixed flash area. Configure appropriately
 #define LUA_USE_MODULES_DIUSFIFO  //       if you are going to use them!
 #define LUA_USE_MODULES_RTCSAMPLER
+//#define LUA_USE_MODULES_SIGMA_DELTA
 #define LUA_USE_MODULES_SNTP
 #define LUA_USE_MODULES_INTELLIGENTLI
 #define LUA_USE_MODULES_S4PP

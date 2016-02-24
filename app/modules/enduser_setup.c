@@ -29,6 +29,8 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * @author Robert Foss <dev@robertfoss.se>
+ *
+ * Additions & fixes: Johny Mattsson <jmattsson@dius.com.au>
  */
 
 #include "module.h"
@@ -525,26 +527,15 @@ static int enduser_setup_http_handle_credentials(char *data, unsigned short data
   enduser_setup_http_urldecode(cnf.ssid, name_str_start, name_str_len);
   enduser_setup_http_urldecode(cnf.password, pwd_str_start, pwd_str_len);
 
-  int err = manual ? TRUE : wifi_set_opmode(STATION_MODE | wifi_get_opmode());
-  if (err == FALSE)
-  {
-    wifi_set_opmode(~STATION_MODE & wifi_get_opmode());
-    ENDUSER_SETUP_ERROR("station_start failed. wifi_set_opmode failed.", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_FATAL);
-  }
-  err = wifi_station_set_config(&cnf);
-  if (err == FALSE)
-  {
-    if (!manual)
-      wifi_set_opmode(~STATION_MODE & wifi_get_opmode());
-    ENDUSER_SETUP_ERROR("station_start failed. wifi_station_set_config failed.", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_FATAL);
-  }
-  err = wifi_station_disconnect();
-  if (err == FALSE)
+  if (!wifi_station_disconnect())
   {
     ENDUSER_SETUP_ERROR("station_start failed. wifi_station_disconnect failed.", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_NONFATAL);
   }
-  err = wifi_station_connect();
-  if (err == FALSE)
+  if (!wifi_station_set_config(&cnf))
+  {
+    ENDUSER_SETUP_ERROR("station_start failed. wifi_station_set_config failed.", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_FATAL);
+  }
+  if (wifi_station_connect())
   {
     ENDUSER_SETUP_ERROR("station_start failed. wifi_station_connect failed.\n", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_FATAL);
   }
@@ -1017,7 +1008,7 @@ static void enduser_setup_ap_start(void)
   cnf.ssid_hidden = 0;
   cnf.max_connection = 5;
   cnf.beacon_interval = 100;
-  wifi_set_opmode(SOFTAP_MODE | wifi_get_opmode()); // Changed behavior: Need to be in AP mode before AP config will save
+  wifi_set_opmode(STATIONAP_MODE);
   wifi_softap_set_config(&cnf);
 }
 

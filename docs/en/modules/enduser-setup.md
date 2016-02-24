@@ -10,7 +10,9 @@ After an IP address has been successfully obtained this module will stop as if [
 
 Controls whether manual AP configuration is used.
 
-By default the `enduser_setup` module automatically configures an open access point when starting, and stops it when the device has been successfully joined to a WiFi network. If manual mode has been enabled, neither of this is done. The device must be manually configured for `wifi.SOFTAP` mode prior to calling `enduser_setup.start()`. Additionally, the portal is not stopped after the device has been successfully configured.
+By default the `enduser_setup` module automatically configures an open access point when starting, and stops it when the device has been successfully joined to a WiFi network. If manual mode has been enabled, neither of this is done. The device must be manually configured for `wifi.SOFTAP` mode prior to calling `enduser_setup.start()`. Additionally, the portal is not stopped after the device has successfully joined to a WiFi network.
+
+Most importantly, *the `onConfigured()` callback is not supported in manual mode*. This limitation may disappear in the future.
 
 #### Syntax
 `enduser_setup.manual([on_off])`
