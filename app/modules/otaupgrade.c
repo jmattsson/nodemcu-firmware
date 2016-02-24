@@ -46,6 +46,10 @@
 # error "SPIFFS location must be explicitly set when using OTA upgrade!"
 #endif
 
+#ifndef OTAUPGRADE_BUILD_ID
+# define OTAUPGRADE_BUILD_ID 0
+#endif
+
 /* ---------- Supporting internals --------------------------------------- */
 
 #include "otaupgrade.h"
@@ -355,6 +359,7 @@ static const LUA_REG_TYPE otaupgrade_map[] =
   { LSTRKEY( "accept" ),   LFUNCVAL( lotaupgrade_accept) },
   { LSTRKEY( "reject" ),   LFUNCVAL( lotaupgrade_reject) },
   { LSTRKEY( "info" ),     LFUNCVAL( lotaupgrade_info) },
+  { LSTRKEY( "BUILD_ID"),  LNUMVAL( OTAUPGRADE_BUILD_ID ) },
   { LNILKEY, LNILVAL }
 };
 
