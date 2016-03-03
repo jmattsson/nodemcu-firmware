@@ -37,6 +37,7 @@
 #include "flash_api.h"
 #include "user_interface.h"
 #include "mem.h"
+extern sint8 espconn_tcp_set_wnd(uint8);
 
 /* Ensure we don't override Cache_Read_Enable() unintentionally, as that would
  * be Rather Bad(tm) */
@@ -165,6 +166,7 @@ static int lotaupgrade_commence (lua_State* L)
     system_soft_wdt_feed ();
     platform_flash_erase_sector (page_addr / SPI_FLASH_SEC_SIZE);
   }
+  espconn_tcp_set_wnd(1);
   ota_flashing_in_progress = true;
   return 0;
 }
