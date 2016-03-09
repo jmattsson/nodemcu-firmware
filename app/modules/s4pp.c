@@ -649,6 +649,12 @@ static void on_dns_found (const char *name, ip_addr_t *ip, void *arg)
   lua_call (L, 1, 0);
 }
 
+static void on_connect(void* arg)
+{
+  struct espconn* conn=(struct espconn*)arg;
+  espconn_set_opt(conn,ESPCONN_REUSEADDR);
+}
+
 
 // s4pp.upload({server:, port:, secure:, user:, key:}, iterator, callback)
 static int s4pp_do_upload (lua_State *L)
@@ -697,6 +703,7 @@ static int s4pp_do_upload (lua_State *L)
   espconn_regist_reconcb   (&sud->conn, on_reconnect);
   espconn_regist_recvcb    (&sud->conn, on_recv);
   espconn_regist_sentcb    (&sud->conn, on_sent);
+  espconn_regist_connectcb (&sud->conn, on_connect);
 
   lua_getfield (L, 1, "secure");
   if (lua_isnumber (L, -1) && lua_tonumber (L, -1) > 0)
