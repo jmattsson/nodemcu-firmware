@@ -33,6 +33,9 @@
  * Additions & fixes: Johny Mattsson <jmattsson@dius.com.au>
  */
 
+#define XMEM_TRACK "enduser"
+#include "xmem.h"
+
 #include "module.h"
 #include "lauxlib.h"
 #include "platform.h"
@@ -409,7 +412,7 @@ static int enduser_setup_http_load_payload(void)
 
     int payload_len = LITLEN(http_header_200) + cl_len + LITLEN(http_html_backup);
     state->http_payload_len = payload_len;
-    state->http_payload_data = (char *) c_malloc(payload_len);
+    state->http_payload_data = (char *)xmalloc(payload_len);
     if (state->http_payload_data == NULL)
     {
       return 2;
@@ -426,7 +429,7 @@ static int enduser_setup_http_load_payload(void)
 
   int payload_len = LITLEN(http_header_200) + cl_len + file_len;
   state->http_payload_len = payload_len;
-  state->http_payload_data = (char *) c_malloc(payload_len);
+  state->http_payload_data = (char *)xmalloc(payload_len);
   if (state->http_payload_data == NULL)
   {
     return 2;
@@ -517,7 +520,7 @@ static void do_station_cfg (task_param_t param, uint8_t prio)
   wifi_station_disconnect ();
   wifi_station_set_config (cnf);
   wifi_station_connect ();
-  os_free (cnf);
+  xfree (cnf);
 }
 
 
@@ -551,7 +554,7 @@ static int enduser_setup_http_handle_credentials(char *data, unsigned short data
     return 1;
   }
 
-  struct station_config *cnf = os_zalloc(sizeof(struct station_config));
+  struct station_config *cnf = xzalloc(sizeof(struct station_config));
   enduser_setup_http_urldecode(cnf->ssid, name_str_start, name_str_len);
   enduser_setup_http_urldecode(cnf->password, pwd_str_start, pwd_str_len);
 
@@ -696,7 +699,7 @@ static void free_scan_listeners (void)
   while (l)
   {
     next = l->next;
-    c_free (l);
+    xfree (l);
     l = next;
   }
   state->scan_listeners = 0;
@@ -724,7 +727,7 @@ static void on_disconnect (void *arg)
         conn->proto.tcp->remote_ip, conn->proto.tcp->remote_port))
       {
         *sl = l->next;
-        c_free (l);
+        xfree (l);
         /* No early exit to guard against multi-entry on list */
       }
       else
@@ -790,7 +793,7 @@ static void on_scan_done (void *arg, STATUS status)
     /* To be able to safely escape a pathological SSID, we need 2*32 bytes */
     const size_t max_entry_sz = sizeof("{\"ssid\":\"\",\"rssi\":},") + 2*32 + 6;
     const size_t alloc_sz = hdr_sz + num_nets * max_entry_sz + 3;
-    char *http = os_zalloc (alloc_sz);
+    char *http = xzalloc (alloc_sz);
     if (!http)
       goto serve_500;
 
@@ -823,7 +826,7 @@ static void on_scan_done (void *arg, STATUS status)
     http[hdr_sz] = '['; /* Rewrite the \0 with the correct start of body */
 
     notify_scan_listeners (http, hdr_sz + body_sz);
-    c_free (http);
+    xfree (http);
     return;
   }
 
@@ -853,7 +856,7 @@ static void enduser_setup_http_recvcb(void *arg, char *data, unsigned short data
     }
     else if (c_strncmp(data + 4, "/aplist ", 8) == 0)
     {
-      scan_listener_t *l = os_malloc (sizeof (scan_listener_t));
+      scan_listener_t *l = xmalloc (sizeof (scan_listener_t));
       if (!l)
         ENDUSER_SETUP_ERROR_VOID("out of memory", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_NONFATAL);
 
@@ -928,12 +931,12 @@ static void enduser_setup_http_connectcb(void *arg)
 static int enduser_setup_http_start(void)
 {
   ENDUSER_SETUP_DEBUG(lua_getstate(), "enduser_setup_http_start");
-  state->espconn_http_tcp = (struct espconn *) c_malloc(sizeof(struct espconn));
+  state->espconn_http_tcp = (struct espconn *)xmalloc(sizeof(struct espconn));
   if (state->espconn_http_tcp == NULL)
   {
     ENDUSER_SETUP_ERROR("http_start failed. Memory allocation failed (espconn_http_tcp == NULL).", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_FATAL);
   }
-  esp_tcp *esp_tcp_data = (esp_tcp *) c_malloc(sizeof(esp_tcp));
+  esp_tcp *esp_tcp_data = (esp_tcp *)xmalloc(sizeof(esp_tcp));
   if (esp_tcp_data == NULL)
   {
     ENDUSER_SETUP_ERROR("http_start failed. Memory allocation failed (esp_udp == NULL).", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_FATAL);
@@ -1063,7 +1066,7 @@ static void enduser_setup_dns_recv_callback(void *arg, char *recv_data, unsigned
   }
 
 
-  char *dns_reply = (char *) c_malloc(dns_reply_len);
+  char *dns_reply = (char *)xmalloc(dns_reply_len);
   if (dns_reply == NULL)
   {
     ENDUSER_SETUP_ERROR_VOID("dns_recv_callback failed. Failed to allocate memory.", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_NONFATAL);
@@ -1091,7 +1094,7 @@ static void enduser_setup_dns_recv_callback(void *arg, char *recv_data, unsigned
 
   int8_t err;
   err = espconn_send(callback_espconn, dns_reply, dns_reply_len);
-  c_free(dns_reply);
+  xfree(dns_reply);
   if (err == ESPCONN_MEM)
   {
     ENDUSER_SETUP_ERROR_VOID("dns_recv_callback failed. Failed to allocate memory for send.", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_FATAL);
@@ -1120,24 +1123,24 @@ static void enduser_setup_free(void)
   {
     if (state->espconn_dns_udp->proto.udp != NULL)
     {
-      c_free(state->espconn_dns_udp->proto.udp);
+      xfree(state->espconn_dns_udp->proto.udp);
     }
-    c_free(state->espconn_dns_udp);
+    xfree(state->espconn_dns_udp);
   }
 
   if (state->espconn_http_tcp != NULL)
   {
     if (state->espconn_http_tcp->proto.tcp != NULL)
     {
-      c_free(state->espconn_http_tcp->proto.tcp);
+      xfree(state->espconn_http_tcp->proto.tcp);
     }
-    c_free(state->espconn_http_tcp);
+    xfree(state->espconn_http_tcp);
   }
-  c_free(state->http_payload_data);
+  xfree(state->http_payload_data);
 
   free_scan_listeners ();
 
-  c_free(state);
+  xfree(state);
   state = NULL;
 }
 
@@ -1150,13 +1153,13 @@ static int enduser_setup_dns_start(void)
   {
     ENDUSER_SETUP_ERROR("dns_start failed. Appears to already be started (espconn_dns_udp != NULL).", ENDUSER_SETUP_ERR_UNKOWN_ERROR, ENDUSER_SETUP_ERR_FATAL);
   }
-  state->espconn_dns_udp = (struct espconn *) c_malloc(sizeof(struct espconn));
+  state->espconn_dns_udp = (struct espconn *)xmalloc(sizeof(struct espconn));
   if (state->espconn_dns_udp == NULL)
   {
     ENDUSER_SETUP_ERROR("dns_start failed. Memory allocation failed (espconn_dns_udp == NULL).", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_FATAL);
   }
 
-  esp_udp *esp_udp_data = (esp_udp *) c_malloc(sizeof(esp_udp));
+  esp_udp *esp_udp_data = (esp_udp *)xmalloc(sizeof(esp_udp));
   if (esp_udp_data == NULL)
   {
     ENDUSER_SETUP_ERROR("dns_start failed. Memory allocation failed (esp_udp == NULL).", ENDUSER_SETUP_ERR_OUT_OF_MEMORY, ENDUSER_SETUP_ERR_FATAL);
@@ -1215,7 +1218,7 @@ static int enduser_setup_init(lua_State *L)
     return ENDUSER_SETUP_ERR_UNKOWN_ERROR;
   }
 
-  state = (enduser_setup_state_t *) os_zalloc(sizeof(enduser_setup_state_t));
+  state = (enduser_setup_state_t *)xzalloc(sizeof(enduser_setup_state_t));
   if (state == NULL)
   {
     enduser_setup_error(L, "init failed. Unable to allocate memory.", ENDUSER_SETUP_ERR_OUT_OF_MEMORY);
@@ -1320,6 +1323,7 @@ static const LUA_REG_TYPE enduser_setup_map[] = {
   { LSTRKEY( "manual" ), LFUNCVAL( enduser_setup_manual )},
   { LSTRKEY( "start" ), LFUNCVAL( enduser_setup_start )},
   { LSTRKEY( "stop" ),  LFUNCVAL( enduser_setup_stop  )},
+  XMEM_LUA_TABLE_ENTRY
   { LNILKEY, LNILVAL}
 };
 

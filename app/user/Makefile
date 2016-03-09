@@ -15,6 +15,7 @@ ifndef PDIR
 GEN_LIBS = libuser.a
 endif
 
+STD_CFLAGS=-std=gnu11 -Wno-implicit-function-declaration
 
 #############################################################
 # Configuration i.e. compile options etc.

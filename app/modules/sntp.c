@@ -33,10 +33,12 @@
 
 // Module for Simple Network Time Protocol (SNTP)
 
+//#define XMEM_TRACK "sntp"
+#include "xmem.h"
+
 #include "module.h"
 #include "lauxlib.h"
 #include "os_type.h"
-#include "osapi.h"
 #include "lwip/udp.h"
 #include "c_stdlib.h"
 #include "user_modules.h"
@@ -102,7 +104,7 @@ static void cleanup (lua_State *L)
   udp_remove (state->pcb);
   luaL_unref (L, LUA_REGISTRYINDEX, state->sync_cb_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, state->err_cb_ref);
-  os_free (state);
+  xfree (state);
   state = 0;
 }
 
@@ -319,7 +321,7 @@ static int sntp_sync (lua_State *L)
   if (state)
     return luaL_error (L, "sync in progress");
 
-  state = (sntp_state_t *)c_malloc (sizeof (sntp_state_t));
+  state = (sntp_state_t *)xmalloc (sizeof (sntp_state_t));
   if (!state)
     sync_err ("out of memory");
 
@@ -377,7 +379,7 @@ error:
   {
     if (state->pcb)
       udp_remove (state->pcb);
-    c_free (state);
+    xfree (state);
     state = 0;
   }
   return luaL_error (L, errmsg);
@@ -387,6 +389,7 @@ error:
 // Module function map
 static const LUA_REG_TYPE sntp_map[] = {
   { LSTRKEY("sync"),  LFUNCVAL(sntp_sync)  },
+  XMEM_LUA_TABLE_ENTRY
   { LNILKEY, LNILVAL }
 };
 
