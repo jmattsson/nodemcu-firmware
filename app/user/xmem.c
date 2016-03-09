@@ -25,6 +25,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "xmem.h"
 #include "c_stdio.h"
 
+#define visible2hdr(p) (p ? (char*)p-4 : 0)
+#define hdr2visible(h) (h ? (char*)h+4 : 0)
+
 /* Wrappers for the SDK Port allocator */
 void *_port_malloc(size_t sz) { return pvPortMalloc(sz, "", 0); }
 void *_port_zalloc(size_t sz) { return pvPortZalloc(sz, "", 0); }
@@ -32,9 +35,9 @@ void *_port_realloc(void *p, size_t sz) { return pvPortRealloc(p, sz, "", 0); }
 void _port_free(void *p) { vPortFree(p, "", 0); }
 
 
-static xmemslot_t *find(xmemdb_t *db, void *p)
+static xmemslot_t *find(xmemdb_t *db, void *h)
 {
-  xmemslot_t tmp = { .used = 0, .line = 0, .lptr = (uint32_t)p };
+  xmemslot_t tmp = { .used = 0, .line = 0, .lptr = (uint32_t)h };
   for (xmemblock_t *block = db->block; block; block = block->next)
   {
     for (unsigned i = 0; i < sizeof(block->slots)/sizeof(block->slots[0]); ++i)
@@ -96,7 +99,7 @@ static bool empty_block (xmemblock_t *block)
 {
   bool empty = true;
   for (unsigned i = 0; i < sizeof(block->slots)/sizeof(block->slots[0]); ++i)
-    empty |= block->slots[i].used;
+    empty &= !block->slots[i].used;
   return empty;
 }
 
@@ -126,31 +129,31 @@ static void xmem_sweep (xmemdb_t *db)
 }
 
 
-static void note (xmemdb_t *db, uint32_t line, void *p)
+static void note (xmemdb_t *db, uint32_t line, void *h)
 {
-  xmemslot_t *slot = find (db, p);
+  xmemslot_t *slot = find (db, h);
   if (slot)
   {
-    c_printf("\nXMEM: %p already allocated at line %d, being allocated again without free on line %d!\n", p, slot->line, line);
+    c_printf("\nXMEM: %p already allocated at line %d, being allocated again without free on line %d!\n", h, slot->line, line);
     return; // Keep things simple, don't store another entry
   }
 
   slot = next_free (db);
   if (!slot)
   {
-    c_printf("\nXMEM: failed to record %p allocated at line %d - no memory!\n", p, line);
+    c_printf("\nXMEM: failed to record %p allocated at line %d - no memory!\n", h, line);
     return;
   }
 
-  xmemslot_t tmp = { .used = 1, .line = line, .lptr = (uint32_t)p };
+  xmemslot_t tmp = { .used = 1, .line = line, .lptr = (uint32_t)h };
   *slot = tmp;
 }
 
-static void erase (xmemdb_t *db, uint32_t line, void *p)
+static void erase (xmemdb_t *db, uint32_t line, void *h)
 {
-  xmemslot_t *slot = find (db, p);
+  xmemslot_t *slot = find (db, h);
   if (!slot)
-    c_printf("\nXMEM: freeing unknown pointer %p from line %d!\n", p, line);
+    c_printf("\nXMEM: freeing unknown pointer %p from line %d!\n", h, line);
   else
     slot->used = 0;
 
@@ -161,10 +164,9 @@ static void erase (xmemdb_t *db, uint32_t line, void *p)
 #define CANARY_CHK   0xa000
 #define CANARY_MASK  0xe000
 #define CANARY_VAL   0xa55a
-static void canary (char *p, size_t sz)
+static void canary (char *h, size_t sz)
 {
-  char *pre = p - 2;
-  char *post = p + sz;
+  char *post = hdr2visible (h) + sz;
   uint16_t val = sz & ~CANARY_MASK;
   if (sz & CANARY_MASK)
   {
@@ -172,78 +174,80 @@ static void canary (char *p, size_t sz)
     val = 0;
   }
   val |= CANARY_CHK;
-  pre[0] = val >> 8;
-  pre[1] = val & 0xff;
+  h[0] = val >> 8;
+  h[1] = val & 0xff;
   post[0] = CANARY_VAL >> 8;
   post[1] = CANARY_VAL & 0xff;
 }
 
-static size_t canary_get_size (char *p)
+static size_t canary_get_size (char *h)
 {
-  char *pre = p - 2;
-  uint16_t val = pre[0] << 8 | pre[1];
+  uint16_t val = (h[0] << 8) | h[1];
   if ((val & CANARY_MASK) != CANARY_CHK)
   {
-    c_printf("\nXMEM: canary header missing on %p! (buffer underrun?)\n", p);
+    c_printf("\nXMEM: canary header missing on %p! (buffer underrun?)\n", h);
     return 0;
   }
   return val & ~CANARY_MASK;
 }
 
-static void check_canary (char *p)
+static void check_canary (char *h)
 {
-  size_t sz = canary_get_size (p);
+  size_t sz = canary_get_size (h);
   if (sz)
   {
-    char *post = p + sz;
-    uint16_t canary = post[0] << 8 | post[1];
+    char *post = hdr2visible(h) + sz;
+    uint16_t canary = (post[0] << 8) | post[1];
     if (canary != CANARY_VAL)
-      c_printf("\nXMEM: dead canary at %p! %x but expected %x\n", p, canary, CANARY_VAL);
+      c_printf("\nXMEM: dead canary at %p! %x but expected %x\n", h, canary, CANARY_VAL);
   }
   else
-    c_printf("\nXMEM: %p marked as too large for canary, not checking\n", p);
+    c_printf("\nXMEM: %p marked as too large for canary, not checking\n", h);
 }
 
 void *_xmem_alloc(size_t sz, xmemdb_t *db, uint32_t line, xmem_alloc_fn_t fn)
 {
-  void *p = fn (sz + 4);
-  if (p)
+  char *h = fn (sz + 6);
+  if (h)
   {
-    note(db, line, p);
-    canary(p, sz);
+    note(db, line, h);
+    canary(h, sz);
   }
-  return p;
+  return hdr2visible (h);
 }
 
 
 void *_xmem_realloc(void *p, size_t sz, xmemdb_t *db, uint32_t line, xmem_realloc_fn_t fn)
 {
-  void *p2 = fn (p, sz + 4);
-  if (p2)
+  char *h = visible2hdr (p);
+  char *h2 = fn (h, sz + 6);
+  if (h2)
   {
-    canary (p2, sz);
-    erase (db, line, p);
-    note (db, line, p2);
+    canary (h2, sz);
+    erase (db, line, h);
+    note (db, line, h2);
   }
-  return p2;
+  return hdr2visible (h2);
 }
 
 
 void *_xmem_free(void *p, xmemdb_t *db, uint32_t line, xmem_free_fn_t fn)
 {
-  if (p)
+  char *h = visible2hdr (p);
+  if (h)
   {
-    check_canary (p);
-    erase (db, line, p);
+    check_canary (h);
+    erase (db, line, h);
   }
-  fn ((char *)p - 4);
+  fn (h);
 }
 
 
 void xmem_dump_db(xmemdb_t *db)
 {
   c_printf("XMEM dump for \"%s\":\n", db->name);
-  for (xmemblock_t *block = db->block; block; block = block->next)
+  size_t num_blocks = 0;
+  for (xmemblock_t *block = db->block; block; block = block->next, ++num_blocks)
   {
     for (unsigned i = 0; i < sizeof(block->slots)/sizeof(block->slots[0]); ++i)
     {
@@ -252,10 +256,10 @@ void xmem_dump_db(xmemdb_t *db)
       {
         char *p = (char *)(0x3fe00000 | slot.lptr);
         size_t sz = canary_get_size (p);
-        c_printf("%p (%d) @ L%d\n", p, sz, slot.line);
+        c_printf("%p (%d) @ L%d\n", hdr2visible(p), sz, slot.line);
         check_canary (p);
       }
     }
   }
-  c_printf("XMEM end dump\n");
+  c_printf("XMEM dump end (%d tracking blocks)\n", num_blocks);
 }
