@@ -33,10 +33,12 @@
 
 // Module for Simple Network Time Protocol (SNTP)
 
+//#define XMEM_TRACK "sntp"
+#include "xmem.h"
+
 #include "module.h"
 #include "lauxlib.h"
 #include "os_type.h"
-#include "osapi.h"
 #include "lwip/udp.h"
 #include "c_stdlib.h"
 #include "user_modules.h"
@@ -94,13 +96,15 @@ typedef struct
 static sntp_state_t *state;
 static ip_addr_t server;
 
+static void on_timeout (void *arg);
+
 static void cleanup (lua_State *L)
 {
   os_timer_disarm (&state->timer);
   udp_remove (state->pcb);
   luaL_unref (L, LUA_REGISTRYINDEX, state->sync_cb_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, state->err_cb_ref);
-  os_free (state);
+  xfree (state);
   state = 0;
 }
 
@@ -121,6 +125,13 @@ static void handle_error (lua_State *L)
 
 static void sntp_dosend (lua_State *L)
 {
+  if (state->attempts == 0)
+  {
+    os_timer_disarm (&state->timer);
+    os_timer_setfn (&state->timer, on_timeout, NULL);
+    os_timer_arm (&state->timer, 1000, 1);
+  }
+
   ++state->attempts;
   sntp_dbg("sntp: attempt %d\n", state->attempts);
 
@@ -153,7 +164,9 @@ static void sntp_dosend (lua_State *L)
 
 static void sntp_dns_found(const char *name, ip_addr_t *ipaddr, void *arg)
 {
-  lua_State *L = arg;
+  (void)arg;
+
+  lua_State *L = lua_getstate ();
   if (ipaddr == NULL)
   {
     NODE_ERR("DNS Fail!\n");
@@ -169,8 +182,9 @@ static void sntp_dns_found(const char *name, ip_addr_t *ipaddr, void *arg)
 
 static void on_timeout (void *arg)
 {
+  (void)arg;
   sntp_dbg("sntp: timer\n");
-  lua_State *L = arg;
+  lua_State *L = lua_getstate ();
   if (state->attempts >= MAX_ATTEMPTS)
     handle_error (L);
   else
@@ -307,7 +321,7 @@ static int sntp_sync (lua_State *L)
   if (state)
     return luaL_error (L, "sync in progress");
 
-  state = (sntp_state_t *)c_malloc (sizeof (sntp_state_t));
+  state = (sntp_state_t *)xmalloc (sizeof (sntp_state_t));
   if (!state)
     sync_err ("out of memory");
 
@@ -341,10 +355,6 @@ static int sntp_sync (lua_State *L)
   else
     state->err_cb_ref = LUA_NOREF;
 
-  os_timer_disarm (&state->timer);
-  os_timer_setfn (&state->timer, on_timeout, L);
-  os_timer_arm (&state->timer, 1000, 1);
-
   state->attempts = 0;
 
   // use last server, unless new one specified
@@ -354,7 +364,7 @@ static int sntp_sync (lua_State *L)
     const char *hostname = luaL_checklstring(L, 1, &l);
     if (l>128 || hostname == NULL)
       sync_err("need <128 hostname");
-    err_t err = dns_gethostbyname(hostname, &server, sntp_dns_found, &L);
+    err_t err = dns_gethostbyname(hostname, &server, sntp_dns_found, state);
     if (err == ERR_INPROGRESS)
       return 0;  // Callback function sntp_dns_found will handle sntp_dosend for us
     else if (err == ERR_ARG)
@@ -369,7 +379,7 @@ error:
   {
     if (state->pcb)
       udp_remove (state->pcb);
-    c_free (state);
+    xfree (state);
     state = 0;
   }
   return luaL_error (L, errmsg);
@@ -379,6 +389,7 @@ error:
 // Module function map
 static const LUA_REG_TYPE sntp_map[] = {
   { LSTRKEY("sync"),  LFUNCVAL(sntp_sync)  },
+  XMEM_LUA_TABLE_ENTRY
   { LNILKEY, LNILVAL }
 };
 
