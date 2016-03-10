@@ -60,9 +60,13 @@ static int locp_register (lua_State *L)
   lua_pushvalue (L, 1);
   cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-  wifi_register_rfid_locp_recv_cb (locp_cb);
-
-  int ret = wifi_rfid_locp_recv_open ();
+  // Ensure there is no previous LOCP state hanging around
+  wifi_rfid_locp_recv_close ();
+  wifi_unregister_rfid_locp_recv_cb ();
+  // Start up locp
+  int ret=wifi_register_rfid_locp_recv_cb (locp_cb);
+  if (ret==0)
+    ret = wifi_rfid_locp_recv_open ();
   if (ret != 0)
     return luaL_error (L, "failed to start listening for LOCP frames: %d\n", ret);
 
@@ -72,8 +76,6 @@ static int locp_register (lua_State *L)
 
 static int locp_unregister (lua_State *L)
 {
-  wifi_rfid_locp_recv_close ();
-  wifi_unregister_rfid_locp_recv_cb ();
   luaL_unref (L, LUA_REGISTRYINDEX, cb_ref);
   cb_ref = LUA_NOREF;
   return 0;
