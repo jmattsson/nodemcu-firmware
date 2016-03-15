@@ -1,4 +1,8 @@
 # WiFi Module
+| Since  | Origin / Contributor  | Maintainer  | Source  |
+| :----- | :-------------------- | :---------- | :------ |
+| 2015-05-12 | [Zeroday](https://github.com/funshine) | [dnc40085](https://github.com/dnc40085) | [wifi.c](../../../app/modules/wifi.c)|
+
 The NodeMCU WiFi control is spread across several tables:
 
 - `wifi` for overall WiFi configuration
@@ -154,6 +158,10 @@ Starts to auto configuration, if success set up SSID and password automatically.
 Intended for use with SmartConfig apps, such as Espressif's [Android & iOS app](https://github.com/espressifapp).
 
 Only usable in `wifi.STATION` mode.
+
+!!! note "Note:"
+
+    SmartConfig is disabled by default and can be enabled by setting `WIFI_SMART_ENABLE` in [`user_config.h`](https://github.com/nodemcu/nodemcu-firmware/blob/dev/app/include/user_config.h#L96) before you build the firmware.
 
 #### Syntax
 `wifi.startsmart(type, callback)`
