@@ -21,7 +21,6 @@
 #ifdef DEVELOP_VERSION
 #define NODE_DEBUG
 #define COAP_DEBUG
-#define BIT_RATE_DEFAULT BIT_RATE_74880
 #else
 #define BIT_RATE_DEFAULT BIT_RATE_115200
 #endif /* DEVELOP_VERSION */
@@ -42,6 +41,7 @@
 #endif	/* NODE_ERROR */
 
 #define GPIO_INTERRUPT_ENABLE
+#define GPIO_INTERRUPT_HOOK_ENABLE
 // #define GPIO_SAFE_NO_INTR_ENABLE
 
 #define ICACHE_STORE_TYPEDEF_ATTR __attribute__((aligned(4),packed))
@@ -53,13 +53,11 @@
 #define NO_INTR_CODE inline
 #endif
 
-#define CLIENT_SSL_ENABLE
+//#define CLIENT_SSL_ENABLE
 //#define MD2_ENABLE
 #define SHA2_ENABLE
 
-// #define BUILD_WOFS		1
 #define BUILD_SPIFFS	1
-
 #define SPIFFS_CACHE 1
 //#define SPIFFS_FIXED_LOCATION (2*1024*1024)
 #define SPIFFS_SIZE_1M_BOUNDARY 1
@@ -95,6 +93,8 @@
 */
 //#define WIFI_STA_HOSTNAME "NodeMCU"
 //#define WIFI_STA_HOSTNAME_APPEND_MAC
+
+//#define WIFI_SMART_ENABLE
 
 #define STRBUF_DEFAULT_INCREMENT 32
 

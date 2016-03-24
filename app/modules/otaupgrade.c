@@ -228,10 +228,11 @@ static int lotaupgrade_accept (lua_State *L)
     return 0;
 
   /* First, clear the preferred bit in the old slot */
-  ota_header old_hdr = get_ota_header (L, !saved_slot, true);
+  ota_header old_hdr = get_ota_header (L, !saved_slot, false);
   old_hdr.flags_num_sections &= ~BOOT_STATUS_PREFERRED;
   uint32_t dst_addr = get_flash_write_addr_for_offset (!saved_slot, 0);
-  ota_flash_write (L, &old_hdr, dst_addr, sizeof (old_hdr));
+  if (hdr.magic == OTA_HDR_MAGIC) // only rewrite if it's an OTA header
+    ota_flash_write (L, &old_hdr, dst_addr, sizeof (old_hdr));
 
   /* If we crash/reboot before the next write, we will use up another
    * test boot bit. Que sera, sera. */
