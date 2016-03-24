@@ -185,13 +185,14 @@ static SpiFlashOpResult fake_spi_flash_read(uint32_t addr, uint32_t* data, uint3
 #define spi_flash_erase_sector bootloader_spi_flash_erase_sector
 #define spi_flash_write        bootloader_spi_flash_write
 #define spi_flash_read         bootloader_spi_flash_read
+extern int booted_flash_page;
 
 static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_erase_sector(uint16_t sector)
 {
   ets_intr_lock();
   Cache_Read_Disable();
   SpiFlashOpResult res=SPIEraseSector(sector);
-  Cache_Read_Enable(0,0,0);
+  Cache_Read_Enable(booted_flash_page,0,0);
   ets_intr_unlock();
   return res;
 }
@@ -201,7 +202,7 @@ static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_write(uint32_t addr, co
   ets_intr_lock();
   Cache_Read_Disable();
   SpiFlashOpResult res=SPIWrite(addr,data,len);
-  Cache_Read_Enable(0,0,0);
+  Cache_Read_Enable(booted_flash_page,0,0);
   ets_intr_unlock();
   return res;
 }
@@ -211,7 +212,7 @@ static SpiFlashOpResult IN_RAM_ATTR bootloader_spi_flash_read(uint32_t addr, uin
   ets_intr_lock();
   Cache_Read_Disable();
   SpiFlashOpResult res=SPIRead(addr,data,len);
-  Cache_Read_Enable(0,0,0);
+  Cache_Read_Enable(booted_flash_page,0,0);
   ets_intr_unlock();
   return res;
 }
@@ -245,7 +246,7 @@ INTERNAL static inline bool flash_fifo_valid_header(const flash_fifo_t* fifo)
 #ifdef BOOTLOADER_CODE
 // We can't use the system function, because we don't have the whole system available
 // On the other hand, we don't have to worry about the system's software watchdog, either,
-// just the hardware one. So let's do it the bare-metal way...static void flash_fifo_tickle_watchdog(void)
+// just the hardware one. So let's do it the bare-metal way...
 static void flash_fifo_tickle_watchdog(void)
 {
   WRITE_PERI_REG(0x60000914, 0x73);
