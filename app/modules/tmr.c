@@ -289,11 +289,12 @@ void rtc_callback(void *arg){
 	}
 }
 
-// Lua: tmr.time() , return rtc time in second
+// Lua: tmr.time() , return rtc time in second, second return microseconds
 static int tmr_time( lua_State* L ){
 	uint64_t us=rtc_timer_update(false);
 	lua_pushinteger(L, us/1000000);
-	return 1; 
+	lua_pushinteger(L, us%1000000);
+	return 2;
 }
 
 // Lua: tmr.softwd( value )
