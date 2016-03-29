@@ -362,6 +362,13 @@ static int lcrypto_decrypt (lua_State *L)
   return crypto_encdec (L, false);
 }
 
+static int lcrypto_rnd32 (lua_State *L)
+{
+  lua_pushinteger (L, os_random());
+
+  return 1;
+}
+
 // Hash function map
 static const LUA_REG_TYPE crypto_hash_map[] = {
   { LSTRKEY( "update" ),  LFUNCVAL( crypto_hash_update ) },
@@ -384,6 +391,7 @@ static const LUA_REG_TYPE crypto_map[] = {
   { LSTRKEY( "hmac"   ),   LFUNCVAL( crypto_lhmac ) },
   { LSTRKEY( "encrypt" ),  LFUNCVAL( lcrypto_encrypt ) },
   { LSTRKEY( "decrypt" ),  LFUNCVAL( lcrypto_decrypt ) },
+  { LSTRKEY( "rnd32" ),    LFUNCVAL( lcrypto_rnd32 ) },
   { LNILKEY, LNILVAL }
 };
 
