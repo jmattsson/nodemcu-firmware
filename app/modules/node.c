@@ -147,10 +147,19 @@ static int node_heap( lua_State* L )
   return 1;
 }
 
+
+static void null_putc(const char c)
+{
+}
+
 static uint32_t get_max_alloc(void)
 {
   uint32_t size=8;
   void* x;
+
+  // We expect some of these allocations to fail. Let's dump the output into /dev/null while
+  // in this function
+  os_install_putc1((void *)null_putc);
 
   while ((x=os_malloc(size)))
   {
@@ -166,6 +175,8 @@ static uint32_t get_max_alloc(void)
       size-=off;
     off>>=1;
   }
+  // Re-enable debug output to the main console.
+  os_install_putc1((void *)uart0_putc);
   return size;
 }
 
