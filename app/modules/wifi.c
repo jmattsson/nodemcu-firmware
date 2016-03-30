@@ -1329,6 +1329,13 @@ static int wifi_ap_dhcp_stop( lua_State* L )
   return 1;
 }
 
+extern bool wifi_softap_deauth(void*);
+static int wifi_ap_kick( lua_State* L )
+{
+  wifi_softap_deauth(0);
+  return 0;
+}
+
 static int wifi_chan (lua_State *L)
 {
   lua_pushinteger (L, wifi_get_channel ());
@@ -1373,6 +1380,7 @@ static const LUA_REG_TYPE wifi_ap_map[] = {
   { LSTRKEY( "setmac" ),       LFUNCVAL( wifi_ap_setmac ) },
   { LSTRKEY( "getclient" ),    LFUNCVAL( wifi_ap_listclient ) },
   { LSTRKEY( "getconfig" ),    LFUNCVAL( wifi_ap_getconfig ) },
+  { LSTRKEY( "kick" ),         LFUNCVAL( wifi_ap_kick ) },
   { LSTRKEY( "dhcp" ),         LROVAL( wifi_ap_dhcp_map ) },
 //{ LSTRKEY( "__metatable" ),  LROVAL( wifi_ap_map ) },
   { LNILKEY, LNILVAL }
