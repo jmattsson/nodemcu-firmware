@@ -27,16 +27,16 @@ static int rtcsampler_prepare (lua_State *L)
       interval_us = lua_tonumber (L, -1);
     lua_pop (L, 1);
 
-    lua_getfield (L, 1, "samples_per");
-    if (lua_isnumber (L, -1))
-      samples_per_boot = lua_tonumber (L, -1);
-    lua_pop (L, 1);
-
     lua_getfield (L, 1, "random_us");
     if (lua_isnumber (L, -1))
       random_us = lua_tonumber (L, -1);
     lua_pop (L, 1);
 #endif
+
+    lua_getfield (L, 1, "samples_per");
+    if (lua_isnumber (L, -1))
+      samples_per_boot = lua_tonumber (L, -1);
+    lua_pop (L, 1);
   }
   else if (!lua_isnone (L, 1))
     return luaL_error (L, "expected table as arg #1");
