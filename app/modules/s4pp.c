@@ -55,6 +55,7 @@ typedef struct
   int key_ref;
   int iter_ref;
   int cb_ref;
+  int ntfy_ref;
   int token_ref;
   int dict_ref;
   int work_ref;
@@ -169,6 +170,7 @@ static void cleanup (s4pp_userdata *sud)
   lua_State *L = sud->L;
 
   luaL_unref (L, LUA_REGISTRYINDEX, sud->cb_ref);
+  luaL_unref (L, LUA_REGISTRYINDEX, sud->ntfy_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->token_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->user_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->key_ref);
@@ -460,6 +462,35 @@ err:
 }
 
 
+static void handle_notify (s4pp_userdata *sud, char *ntfy)
+{
+  if (sud->ntfy_ref == LUA_NOREF)
+    return;
+
+  lua_rawgeti (sud->L, LUA_REGISTRYINDEX, sud->ntfy_ref);
+
+  char *nxtarg = strchr (ntfy, ',');
+  if (nxtarg)
+    *nxtarg++ = 0;
+
+  unsigned code = strtoul (ntfy, NULL, 0);
+  lua_pushinteger (sud->L, code);
+
+  unsigned n_args = 1;
+  while (nxtarg && (n_args + 1) < LUA_MINSTACK)
+  {
+    char *arg = nxtarg;
+    nxtarg = strchr (arg, ',');
+    if (nxtarg)
+      *nxtarg++ = 0;
+
+    lua_pushstring (sud->L, arg);
+    ++n_args;
+  }
+  lua_call (sud->L, n_args, 0);
+}
+
+
 static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
 {
   if (line[len -1] == '\n')
@@ -510,6 +541,8 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
       progress_work (sud);
     }
   }
+  else if (strncmp ("NTFY:", line, 5) == 0)
+    handle_notify (sud, line + 5);
   else
     goto_err_with_msg (sud->L, "unexpected response: %s", line);
   return true;
@@ -659,12 +692,19 @@ static void on_connect(void* arg)
 }
 
 
-// s4pp.upload({server:, port:, secure:, user:, key:}, iterator, callback)
+// s4pp.upload({server:, port:, secure:, user:, key:}, iterator, callback, ntfy)
 static int s4pp_do_upload (lua_State *L)
 {
+  bool have_ntfy = false;
+
   luaL_checktype(L, 1, LUA_TTABLE);
   luaL_checkanyfunction (L, 2);
   luaL_checkanyfunction (L, 3);
+  if (lua_gettop (L) >= 4)
+  {
+    luaL_checkanyfunction (L, 4);
+    have_ntfy = true;
+  }
 
   const char *err_msg = 0;
 #define err_out(msg) do { err_msg = msg; goto err; } while (0)
@@ -719,6 +759,11 @@ static int s4pp_do_upload (lua_State *L)
   sud->iter_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   lua_pushvalue (L, 3);
   sud->cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  if (have_ntfy)
+  {
+    lua_pushvalue (L, 4);
+    sud->ntfy_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  }
 
   lua_getfield (L, 1, "server");
   if (!lua_isstring (L, -1))
@@ -751,7 +796,10 @@ err:
 
 static const LUA_REG_TYPE s4pp_map[] =
 {
-  { LSTRKEY("upload"), LFUNCVAL(s4pp_do_upload) },
+  { LSTRKEY("upload"),        LFUNCVAL(s4pp_do_upload) },
+  { LSTRKEY("NTFY_TIME"),     LNUMVAL(0) },
+  { LSTRKEY("NTFY_FIRMWARE"), LNUMVAL(1) },
+  { LSTRKEY("NTFY_FLAGS"),    LNUMVAL(2) },
   XMEM_LUA_TABLE_ENTRY
   { LNILKEY, LNILVAL }
 };
