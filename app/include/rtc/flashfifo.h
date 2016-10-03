@@ -299,7 +299,7 @@ INTERNAL static inline bool flash_fifo_clear_content(const flash_fifo_t* fifo)
     flash_fifo_erase_all_data_sectors(fifo);
 }
 
-#define FLASH_FIFO_LONGS_PER_READ 64
+#define FLASH_FIFO_LONGS_PER_READ 8
 INTERNAL static inline bool flash_fifo_get_counter(uint32_t* result, const flash_fifo_t* fifo, uint32_t sector, uint32_t offset)
 {
   uint32_t addr=sector*fifo->sector_size+offset;
@@ -538,7 +538,7 @@ API static inline uint32_t flash_fifo_get_max_size(void)
 
 
 // returns true if sample is available, false if not
-API static inline bool flash_fifo_peek_sample(sample_t* dst, uint32_t from_top)
+API static inline bool flash_fifo_peek_sample_deprecated(sample_t* dst, uint32_t from_top)
 {
   const flash_fifo_t* fifo=flash_fifo_get_header();
   if (!flash_fifo_valid_header(fifo))
@@ -570,6 +570,45 @@ API static inline bool flash_fifo_peek_sample(sample_t* dst, uint32_t from_top)
   } while (from_top>0);
   if (tail_index<=head_index)
     return false;
+  return flash_fifo_read_sample(dst,fifo,head_sector,head_index);
+}
+
+API static inline bool flash_fifo_peek_sample(sample_t* dst, uint32_t from_top)
+{
+  const flash_fifo_t* fifo=flash_fifo_get_header();
+  if (!flash_fifo_valid_header(fifo))
+    return false;
+
+  data_sector_t head_sector;
+  uint32_t      head_index;
+  uint32_t      tail_sector;
+  uint32_t      eps=fifo->data_entries_per_sector;
+
+  if (flash_fifo_get_head_sector(&head_sector,fifo)==false ||
+      flash_fifo_get_head_index(&head_index,fifo,head_sector)==false ||
+      flash_fifo_get_tail_sector(&tail_sector,fifo)==false)
+    return false;
+  do
+  {
+    if (head_sector==tail_sector)
+    {
+      uint32_t tail_index;
+      if (flash_fifo_get_tail_index(&tail_index,fifo,tail_sector)==false)
+        return false;
+      if (head_index+from_top>=tail_index) // Gone over the end
+        return false;
+    }
+    head_index+=from_top;
+    from_top=0;
+    if (head_index>=eps)
+    {
+      from_top=head_index-eps;
+      head_index=0;
+      head_sector=flash_fifo_next_data_sector(fifo,head_sector);
+      continue; // ensure check for overrun even if from_top==0
+    }
+    break;
+  } while (true);
   return flash_fifo_read_sample(dst,fifo,head_sector,head_index);
 }
 
