@@ -14,6 +14,12 @@ config LUA_BUILTIN_TABLE
   help
     Includes the table module (recommended).
 
+config LUA_BUILTIN_IO
+  bool "File io module"
+  default "y"
+  help
+    Includes the io module (recommended).
+
 config LUA_BUILTIN_COROUTINE
   bool "Coroutine module"
   default "y"
@@ -85,6 +91,13 @@ config LUA_MODULE_FILE
   default "y"
   help
       Includes the file module (recommended).
+
+config LUA_MODULE_FS
+  bool "Filesystem module (fs)"
+  default "y"
+  help
+      Includes the fs module (recommended). This provides filesystem
+      manipulation and information functions (e.g. mount, list, chdir).
 
 config LUA_MODULE_GPIO
   bool "GPIO module"
