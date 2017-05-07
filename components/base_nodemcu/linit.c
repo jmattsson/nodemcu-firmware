@@ -20,7 +20,7 @@
 BUILTIN_LIB_INIT( BASE,      "",                 luaopen_base);
 BUILTIN_LIB_INIT( LOADLIB,   LUA_LOADLIBNAME,    luaopen_package);
 
-#if defined(LUA_USE_BUILTIN_IO)
+#if defined(CONFIG_LUA_BUILTIN_IO)
 BUILTIN_LIB_INIT( IO,        LUA_IOLIBNAME,      luaopen_io);
 #endif
 
