@@ -1031,9 +1031,15 @@ static void laccept_cb (lua_State *L, lnet_userdata *ud, struct tcp_pcb *newpcb)
   nud->tcp_pcb->so_options |= SOF_KEEPALIVE;
   nud->tcp_pcb->keep_idle = ud->server.timeout * 1000;
   nud->tcp_pcb->keep_cnt = 1;
-  tcp_accepted(ud->tcp_pcb);
 
   lua_call(L, 1, 0);
+
+  // We only mark the socket accepted *after* the accept callback, in order to
+  // avoid a race where we lose data if the other core receives before the
+  // callback has had a chance to register an on('receive') handler.
+  // TODO: don't leak the socket even if the callback throws (though at the
+  // time of writing, that will panic the device regardless).
+  tcp_accepted(ud->tcp_pcb);
 }
 
 static void lrecv_cb (lua_State *L, lnet_userdata *ud, const lnet_recvdata *rd) {
