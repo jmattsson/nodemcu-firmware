@@ -69,6 +69,32 @@ typedef struct lnet_userdata {
 } lnet_userdata;
 
 
+// We stash two different things in the tcp_arg(), either a proper
+// lnet_userdata* or a struct pbuf* (to hold received data until we have
+// accept()ed the socket, and we distinguish the two by whether the
+// lowest bit is set (since both have larger alignment normally).
+
+struct pbuf *maybe_pbuf(void *arg)
+{
+  intptr_t p = (intptr_t)arg;
+  if (p & 0x01)
+    return (struct pbuf *)(p ^ 0x01);
+  else
+    return 0;
+}
+
+lnet_userdata *expected_lnet_userdata(void *arg)
+{
+  intptr_t p = (intptr_t)arg;
+  if (p & 0x01)
+  {
+    // Nope, this is a pbuf, we can't handle that here, so free it!
+    pbuf_free(maybe_pbuf(arg));
+    return NULL;
+  }
+  return arg;
+}
+
 
 // --- Event handling
 
@@ -178,7 +204,7 @@ static bool post_net_err (lnet_userdata *ud, err_t err) {
 }
 
 static void net_err_cb(void *arg, err_t err) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || ud->type != TYPE_TCP_CLIENT || ud->self_ref == LUA_NOREF) return;
   ud->pcb = NULL; // Will be freed at LWIP level
 
@@ -200,7 +226,7 @@ static bool post_net_connected (lnet_userdata *ud) {
 }
 
 static err_t net_connected_cb(void *arg, struct tcp_pcb *tpcb, err_t err) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || ud->pcb != tpcb) return ERR_ABRT;
   if (err != ERR_OK) {
     net_err_cb(arg, err);
@@ -239,7 +265,7 @@ static void net_dns_cb(const char *name, const ip_addr_t *ipaddr, void *arg) {
 
 static bool post_net_recv (lnet_userdata *ud, struct pbuf *p, const ip_addr_t *ip, u16_t port)
 {
-  lnet_event *ev = (lnet_event *)malloc (sizeof (lnet_event) + p->len);
+  lnet_event *ev = (lnet_event *)malloc (sizeof (lnet_event) + p->tot_len);
   if (!ev)
     return false;
 
@@ -249,8 +275,8 @@ static bool post_net_recv (lnet_userdata *ud, struct pbuf *p, const ip_addr_t *i
   if (ip)
     ev->recvdata.src_ip = *ip;
   ev->recvdata.src_port = port;
-  ev->recvdata.payload_len = p->len;
-  pbuf_copy_partial (p, &ev->recvdata.payload, p->len, 0);
+  ev->recvdata.payload_len = p->tot_len;
+  pbuf_copy_partial (p, &ev->recvdata.payload, p->tot_len, 0);
 
   if (!task_post_high (net_event, (task_param_t)ev))
   {
@@ -261,7 +287,7 @@ static bool post_net_recv (lnet_userdata *ud, struct pbuf *p, const ip_addr_t *i
 }
 
 static void net_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || !ud->pcb || ud->type != TYPE_UDP_SOCKET || ud->self_ref == LUA_NOREF) {
     if (p) pbuf_free(p);
     return;
@@ -270,7 +296,7 @@ static void net_udp_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p, cons
 }
 
 static err_t net_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || !ud->pcb || ud->type != TYPE_TCP_CLIENT || ud->self_ref == LUA_NOREF)
     return ERR_ABRT;
   if (!p) {
@@ -284,6 +310,18 @@ static err_t net_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
   return ERR_OK;
 }
 
+static err_t net_tcp_initial_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+  struct pbuf *already_data = maybe_pbuf(arg);
+  if (already_data)
+    pbuf_cat(already_data, p); // append it to existing pbuf, dropping p ref
+  else
+  {
+    intptr_t encoded_p = (int)p | 0x01;
+    tcp_arg(tpcb, (void*)encoded_p); // stash the pbuf until the accept callback can process it
+  }
+  tcp_recved(tpcb, 0); // don't acknowledge this data just yet, we don't want to buffer up excessive amounts!
+  return ERR_OK;
+}
 
 static bool post_net_sent (lnet_userdata *ud) {
   lnet_event *ev = (lnet_event *)malloc (sizeof (lnet_event));
@@ -299,7 +337,7 @@ static bool post_net_sent (lnet_userdata *ud) {
 }
 
 static err_t net_sent_cb(void *arg, struct tcp_pcb *tpcb, u16_t len) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || !ud->pcb || ud->type != TYPE_TCP_CLIENT || ud->self_ref == LUA_NOREF) return ERR_ABRT;
   if (ud->client.cb_sent_ref == LUA_NOREF) return ERR_OK;
 
@@ -325,9 +363,11 @@ static bool post_net_accept (lnet_userdata *ud, struct tcp_pcb *newpcb) {
 
 
 static err_t net_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
-  lnet_userdata *ud = (lnet_userdata*)arg;
+  lnet_userdata *ud = expected_lnet_userdata(arg);
   if (!ud || ud->type != TYPE_TCP_SERVER || !ud->pcb) return ERR_ABRT;
   if (ud->self_ref == LUA_NOREF || ud->server.cb_accept_ref == LUA_NOREF) return ERR_ABRT;
+
+  tcp_recv(newpcb, net_tcp_initial_recv);
 
   return post_net_accept (ud, newpcb) ? ERR_OK : ERR_ABRT;
 }
@@ -1017,25 +1057,6 @@ static void lconnected_cb (lua_State *L, lnet_userdata *ud) {
   }
 }
 
-static void laccept_cb (lua_State *L, lnet_userdata *ud, struct tcp_pcb *newpcb) {
-  lua_rawgeti(L, LUA_REGISTRYINDEX, ud->server.cb_accept_ref);
-
-  lnet_userdata *nud = net_create(L, TYPE_TCP_CLIENT);
-  lua_pushvalue(L, -1);
-  nud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-  nud->tcp_pcb = newpcb;
-  tcp_arg(nud->tcp_pcb, nud);
-  tcp_err(nud->tcp_pcb, net_err_cb);
-  tcp_recv(nud->tcp_pcb, net_tcp_recv_cb);
-  tcp_sent(nud->tcp_pcb, net_sent_cb);
-  nud->tcp_pcb->so_options |= SOF_KEEPALIVE;
-  nud->tcp_pcb->keep_idle = ud->server.timeout * 1000;
-  nud->tcp_pcb->keep_cnt = 1;
-  tcp_accepted(ud->tcp_pcb);
-
-  lua_call(L, 1, 0);
-}
-
 static void lrecv_cb (lua_State *L, lnet_userdata *ud, const lnet_recvdata *rd) {
   if (ud->client.cb_receive_ref != LUA_NOREF) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, ud->client.cb_receive_ref);
@@ -1051,6 +1072,45 @@ static void lrecv_cb (lua_State *L, lnet_userdata *ud, const lnet_recvdata *rd) 
     }
     lua_call(L, num_args, 0);
   }
+}
+
+static void laccept_cb (lua_State *L, lnet_userdata *ud, struct tcp_pcb *newpcb) {
+  lua_rawgeti(L, LUA_REGISTRYINDEX, ud->server.cb_accept_ref);
+
+  lnet_userdata *nud = net_create(L, TYPE_TCP_CLIENT);
+  lua_pushvalue(L, -1);
+  nud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  nud->tcp_pcb = newpcb;
+  struct pbuf *already_data = maybe_pbuf(newpcb->callback_arg);
+  tcp_arg(nud->tcp_pcb, nud);
+  tcp_err(nud->tcp_pcb, net_err_cb);
+  tcp_recv(nud->tcp_pcb, net_tcp_recv_cb);
+  tcp_sent(nud->tcp_pcb, net_sent_cb);
+  nud->tcp_pcb->so_options |= SOF_KEEPALIVE;
+  nud->tcp_pcb->keep_idle = ud->server.timeout * 1000;
+  nud->tcp_pcb->keep_cnt = 1;
+  tcp_accepted(ud->tcp_pcb);
+
+  lua_call(L, 1, 0);
+
+  // Process any data that was received before we handled the accept()
+  if (already_data)
+  {
+    lnet_recvdata *rd =
+      (lnet_recvdata *)malloc (sizeof (lnet_recvdata) + already_data->tot_len);
+    if (!rd)
+      goto err_out;
+
+    rd->payload_len = already_data->tot_len;
+    pbuf_copy_partial (already_data, &rd->payload, already_data->tot_len, 0);
+    pbuf_free(already_data);
+
+    lrecv_cb(L, nud, rd);
+    free(rd);
+    return;
+  }
+err_out:
+  pbuf_free(already_data);
 }
 
 static void lsent_cb (lua_State *L, lnet_userdata *ud) {
