@@ -164,10 +164,8 @@ lnet_userdata *net_create( lua_State *L, enum net_type type ) {
   luaL_getmetatable(L, mt);
   lua_setmetatable(L, -2);
 
-  lua_pushvalue(L, -1);
-  ud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
   ud->type = type;
+  ud->self_ref = LUA_NOREF;
   ud->pcb = NULL;
 
   switch (type) {
@@ -188,16 +186,6 @@ lnet_userdata *net_create( lua_State *L, enum net_type type ) {
   }
   return ud;
 }
-
-
-// Caution: the `ud` is effectively invalid on return of this function!
-void clear_self_ref(lua_State *L, lnet_userdata *ud)
-{
-  int tmpref = ud->self_ref;
-  ud->self_ref = LUA_NOREF;
-  luaL_unref(L, LUA_REGISTRYINDEX, tmpref);
-}
-
 
 // --- LWIP callbacks and task_post helpers
 
@@ -518,6 +506,10 @@ int net_listen( lua_State *L ) {
     }
     return lwip_lua_checkerr(L, err);
   }
+  if (ud->self_ref == LUA_NOREF) {
+    lua_pushvalue(L, 1);
+    ud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  }
   return 0;
 }
 
@@ -545,12 +537,22 @@ int net_connect( lua_State *L ) {
   tcp_sent(ud->tcp_pcb, net_sent_cb);
   ud->tcp_pcb->remote_port = port;
   ip_addr_t addr;
-  ud->client.wait_dns++;
+  ud->client.wait_dns ++;
+  int unref = 0;
+  if (ud->self_ref == LUA_NOREF) {
+    unref = 1;
+    lua_pushvalue(L, 1);
+    ud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  }
   err_t err = dns_gethostbyname(domain, &addr, net_dns_cb, ud);
   if (err == ERR_OK) {
     net_dns_cb(domain, &addr, ud);
   } else if (err != ERR_INPROGRESS) {
-    ud->client.wait_dns--;
+    ud->client.wait_dns --;
+    if (unref) {
+      luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+      ud->self_ref = LUA_NOREF;
+    }
     tcp_abort(ud->tcp_pcb);
     ud->tcp_pcb = NULL;
     return lwip_lua_checkerr(L, err);
@@ -636,6 +638,10 @@ int net_send( lua_State *L ) {
       ud->udp_pcb = NULL;
       return lwip_lua_checkerr(L, err);
     }
+    if (ud->self_ref == LUA_NOREF) {
+      lua_pushvalue(L, 1);
+      ud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    }
   }
   if (!ud->pcb || ud->self_ref == LUA_NOREF)
     return luaL_error(L, "not connected");
@@ -703,13 +709,23 @@ int net_dns( lua_State *L ) {
   }
   if (ud->client.cb_dns_ref == LUA_NOREF)
     return luaL_error(L, "no callback specified");
-  ud->client.wait_dns++;
+  ud->client.wait_dns ++;
+  int unref = 0;
+  if (ud->self_ref == LUA_NOREF) {
+    unref = 1;
+    lua_pushvalue(L, 1);
+    ud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  }
   ip_addr_t addr;
   err_t err = dns_gethostbyname(domain, &addr, net_dns_cb, ud);
   if (err == ERR_OK) {
     net_dns_cb(domain, &addr, ud);
   } else if (err != ERR_INPROGRESS) {
-    ud->client.wait_dns--;
+    ud->client.wait_dns --;
+    if (unref) {
+      luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+      ud->self_ref = LUA_NOREF;
+    }
     return lwip_lua_checkerr(L, err);
   }
   return 0;
@@ -800,7 +816,10 @@ int net_close( lua_State *L ) {
   }
   if (ud->type == TYPE_TCP_SERVER ||
      (ud->pcb == NULL && ud->client.wait_dns == 0)) {
-    clear_self_ref(L, ud);
+    lua_gc(L, LUA_GCSTOP, 0);
+    luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+    ud->self_ref = LUA_NOREF;
+    lua_gc(L, LUA_GCRESTART, 0);
   }
   return 0;
 }
@@ -846,8 +865,10 @@ int net_delete( lua_State *L ) {
       ud->server.cb_accept_ref = LUA_NOREF;
       break;
   }
-  if (ud->self_ref != LUA_NOREF)
-    luaL_error(L, "gc while holding self reference should be impossible!");
+  lua_gc(L, LUA_GCSTOP, 0);
+  luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+  ud->self_ref = LUA_NOREF;
+  lua_gc(L, LUA_GCRESTART, 0);
   return 0;
 }
 
@@ -1000,11 +1021,14 @@ static void ldnsfound_cb (lua_State *L, lnet_userdata *ud, ip_addr_t *addr) {
     }
     lua_call(L, 2, 0);
   }
-  ud->client.wait_dns--;
+  ud->client.wait_dns --;
   if (ud->pcb && ud->type == TYPE_TCP_CLIENT && ud->tcp_pcb->state == CLOSED) {
     tcp_connect(ud->tcp_pcb, addr, ud->tcp_pcb->remote_port, net_connected_cb);
   } else if (!ud->pcb && ud->client.wait_dns == 0) {
-    clear_self_ref(L, ud);
+    lua_gc(L, LUA_GCSTOP, 0);
+    luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+    ud->self_ref = LUA_NOREF;
+    lua_gc(L, LUA_GCRESTART, 0);
   }
 }
 
@@ -1110,7 +1134,10 @@ static void lerr_cb (lua_State *L, lnet_userdata *ud, err_t err)
     lua_call(L, 2, 0);
   }
   if (ud->client.wait_dns == 0) {
-    clear_self_ref(L, ud);
+    lua_gc(L, LUA_GCSTOP, 0);
+    luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
+    ud->self_ref = LUA_NOREF;
+    lua_gc(L, LUA_GCRESTART, 0);
   }
 }
 
