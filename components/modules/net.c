@@ -74,13 +74,13 @@ typedef struct lnet_userdata {
 // accept()ed the socket, and we distinguish the two by whether the
 // lowest bit is set (since both have larger alignment normally).
 
-struct pbuf *maybe_pbuf(void *arg)
+struct pbuf *expected_pbuf(void *arg)
 {
   intptr_t p = (intptr_t)arg;
   if (p & 0x01)
     return (struct pbuf *)(p ^ 0x01);
   else
-    return 0;
+    return 0; // we've already transitioned to userdata
 }
 
 lnet_userdata *expected_lnet_userdata(void *arg)
@@ -89,7 +89,7 @@ lnet_userdata *expected_lnet_userdata(void *arg)
   if (p & 0x01)
   {
     // Nope, this is a pbuf, we can't handle that here, so free it!
-    pbuf_free(maybe_pbuf(arg));
+    pbuf_free(expected_pbuf(arg));
     return NULL;
   }
   return arg;
@@ -311,14 +311,10 @@ static err_t net_tcp_recv_cb(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
 }
 
 static err_t net_tcp_initial_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
-  struct pbuf *already_data = maybe_pbuf(arg);
+  // TODO: lock this pbuf handling against laccept_cb
+  struct pbuf *already_data = expected_pbuf(arg);
   if (already_data)
     pbuf_cat(already_data, p); // append it to existing pbuf, dropping p ref
-  else
-  {
-    intptr_t encoded_p = (int)p | 0x01;
-    tcp_arg(tpcb, (void*)encoded_p); // stash the pbuf until the accept callback can process it
-  }
   tcp_recved(tpcb, 0); // don't acknowledge this data just yet, we don't want to buffer up excessive amounts!
   return ERR_OK;
 }
@@ -367,6 +363,13 @@ static err_t net_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
   if (!ud || ud->type != TYPE_TCP_SERVER || !ud->pcb) return ERR_ABRT;
   if (ud->self_ref == LUA_NOREF || ud->server.cb_accept_ref == LUA_NOREF) return ERR_ABRT;
 
+  // Set up a placeholder pbuf in tcp_arg for net_tcp_inital_recv() to use,
+  // so we get a guaranteed sequencing of tcp_arg() calls
+  struct pbuf *p = pbuf_alloc(PBUF_RAW, 0, PBUF_RAM);
+  if (!p)
+    return ERR_ABRT;
+  intptr_t encoded_p = (int)p | 0x01;
+  tcp_arg(newpcb, (void*)encoded_p);
   tcp_recv(newpcb, net_tcp_initial_recv);
 
   return post_net_accept (ud, newpcb) ? ERR_OK : ERR_ABRT;
@@ -814,8 +817,7 @@ int net_close( lua_State *L ) {
   } else {
     return luaL_error(L, "not connected");
   }
-  if (ud->type == TYPE_TCP_SERVER ||
-     (ud->pcb == NULL && ud->client.wait_dns == 0)) {
+  if (ud->self_ref != LUA_NOREF) {
     lua_gc(L, LUA_GCSTOP, 0);
     luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
     ud->self_ref = LUA_NOREF;
@@ -852,6 +854,7 @@ int net_delete( lua_State *L ) {
       ud->client.cb_disconnect_ref = LUA_NOREF;
       luaL_unref(L, LUA_REGISTRYINDEX, ud->client.cb_reconnect_ref);
       ud->client.cb_reconnect_ref = LUA_NOREF;
+      // fall-through
     case TYPE_UDP_SOCKET:
       luaL_unref(L, LUA_REGISTRYINDEX, ud->client.cb_dns_ref);
       ud->client.cb_dns_ref = LUA_NOREF;
@@ -865,10 +868,6 @@ int net_delete( lua_State *L ) {
       ud->server.cb_accept_ref = LUA_NOREF;
       break;
   }
-  lua_gc(L, LUA_GCSTOP, 0);
-  luaL_unref(L, LUA_REGISTRYINDEX, ud->self_ref);
-  ud->self_ref = LUA_NOREF;
-  lua_gc(L, LUA_GCRESTART, 0);
   return 0;
 }
 
@@ -1081,8 +1080,10 @@ static void laccept_cb (lua_State *L, lnet_userdata *ud, struct tcp_pcb *newpcb)
   lua_pushvalue(L, -1);
   nud->self_ref = luaL_ref(L, LUA_REGISTRYINDEX);
   nud->tcp_pcb = newpcb;
-  struct pbuf *already_data = maybe_pbuf(newpcb->callback_arg);
+  // TODO: lock already_data handling against net_tcp_initial_recv()
+  struct pbuf *already_data = expected_pbuf(newpcb->callback_arg);
   tcp_arg(nud->tcp_pcb, nud);
+
   tcp_err(nud->tcp_pcb, net_err_cb);
   tcp_recv(nud->tcp_pcb, net_tcp_recv_cb);
   tcp_sent(nud->tcp_pcb, net_sent_cb);
@@ -1094,7 +1095,7 @@ static void laccept_cb (lua_State *L, lnet_userdata *ud, struct tcp_pcb *newpcb)
   lua_call(L, 1, 0);
 
   // Process any data that was received before we handled the accept()
-  if (already_data)
+  if (already_data && already_data->tot_len > 0)
   {
     lnet_recvdata *rd =
       (lnet_recvdata *)malloc (sizeof (lnet_recvdata) + already_data->tot_len);
