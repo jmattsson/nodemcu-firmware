@@ -900,12 +900,13 @@
 #endif
 
 /**
- * TCP_WND: The size of a TCP window.  This must be at least 
- * (2 * TCP_MSS) for things to work well
+ * TCP_MSL: Maximum segment lifetime
+ * Override for <tcp_impl.h> file
+ * See https://github.com/nodemcu/nodemcu-firmware/issues/1836 for details
  */
-#ifndef TCP_WND
-#define TCP_WND                         (*(volatile uint32*)0x600011F0)
-#endif 
+#ifndef TCP_MSL
+#define TCP_MSL 5000UL
+#endif
 
 /**
  * TCP_MAXRTX: Maximum number of retransmissions of data segments.
@@ -955,6 +956,14 @@
 #define TCP_MSS                         1460
 #endif
 #endif
+
+/**
+ * TCP_WND: The size of a TCP window.  This must be at least 
+ * (2 * TCP_MSS) for things to work well
+ */
+#ifndef TCP_WND
+#define TCP_WND                         (*(volatile uint32*)0x600011F0)
+#endif 
 
 /**
  * TCP_CALCULATE_EFF_SEND_MSS: "The maximum size of a segment that TCP really
@@ -1455,7 +1464,8 @@
  * SO_REUSE==1: Enable SO_REUSEADDR option.
  */
 #ifndef SO_REUSE
-#define SO_REUSE                        0
+/* See https://github.com/nodemcu/nodemcu-firmware/issues/1836 for details */
+#define SO_REUSE                        1
 #endif
 
 /**

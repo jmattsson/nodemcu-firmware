@@ -1,4 +1,5 @@
 // Module for interfacing with GPIO
+//#define NODE_DEBUG
 
 #include "module.h"
 #include "lauxlib.h"
@@ -8,6 +9,7 @@
 #include "c_types.h"
 #include "c_string.h"
 #include "gpio.h"
+#include "hw_timer.h"
 
 #define PULLUP PLATFORM_GPIO_PULLUP
 #define FLOAT PLATFORM_GPIO_FLOAT
@@ -32,13 +34,23 @@ static int gpio_cb_ref[GPIO_PIN_NUM];
 // It also re-enables the pin interrupt, so that we get another callback queued
 static void gpio_intr_callback_task (task_param_t param, uint8 priority)
 {
-  unsigned pin = param >> 1;
-  unsigned level = param & 1;
+  uint32_t then = (param >> 8) & 0xffffff;
+  uint32_t pin = (param >> 1) & 127;
+  uint32_t level = param & 1;
   UNUSED(priority);
+
+  uint32_t now = system_get_time();
+
+  // Now must be >= then . Add the missing bits
+  if (then > (now & 0xffffff)) {
+    // Now must have rolled over since the interrupt -- back it down
+    now -= 0x1000000;
+  }
+  then = (then + (now & 0x7f000000)) & 0x7fffffff;
 
   NODE_DBG("pin:%d, level:%d \n", pin, level);
   if(gpio_cb_ref[pin] != LUA_NOREF) {
-    // GPIO callbacks are run in L0 and inlcude the level as a parameter
+    // GPIO callbacks are run in L0 and include the level as a parameter
     lua_State *L = lua_getstate();
     NODE_DBG("Calling: %08x\n", gpio_cb_ref[pin]);
     //
@@ -50,7 +62,8 @@ static void gpio_intr_callback_task (task_param_t param, uint8 priority)
     // Do the actual callback
     lua_rawgeti(L, LUA_REGISTRYINDEX, gpio_cb_ref[pin]);
     lua_pushinteger(L, level);
-    lua_call(L, 1, 0);
+    lua_pushinteger(L, then);
+    lua_call(L, 2, 0);
 
     if (INTERRUPT_TYPE_IS_LEVEL(pin_int_type[pin])) {
       // Level triggered -- re-enable the callback
@@ -160,8 +173,7 @@ static int lgpio_write( lua_State* L )
 
 #define DELAY_TABLE_MAX_LEN 256
 #define delayMicroseconds os_delay_us
-// Lua: serout( pin, firstLevel, delay_table, [repeatNum] )
-// -- serout( pin, firstLevel, delay_table, [repeatNum] )
+// Lua: serout( pin, firstLevel, delay_table[, repeat_num[, callback]])
 // gpio.mode(1,gpio.OUTPUT,gpio.PULLUP)
 // gpio.serout(1,1,{30,30,60,60,30,30})  -- serial one byte, b10110010
 // gpio.serout(1,1,{30,70},8)  -- serial 30% pwm 10k, lasts 8 cycles
@@ -170,42 +182,107 @@ static int lgpio_write( lua_State* L )
 // gpio.mode(1,gpio.OUTPUT,gpio.PULLUP)
 // gpio.serout(1,0,{20,10,10,20,10,10,10,100}) -- sim uart one byte 0x5A at about 100kbps
 // gpio.serout(1,1,{8,18},8) -- serial 30% pwm 38k, lasts 8 cycles
+
+typedef struct
+{
+  unsigned pin;
+  unsigned level;
+  uint32 index;
+  uint32 repeats;
+  uint32 *delay_table;
+  uint32 tablelen;
+  task_handle_t done_taskid;
+  int lua_done_ref; // callback when transmission is done
+} serout_t;
+static serout_t serout;
+static const os_param_t TIMER_OWNER = 0x6770696f; // "gpio"
+
+static void seroutasync_done (task_param_t arg)
+{
+  lua_State *L = lua_getstate();
+  luaM_freearray(L, serout.delay_table, serout.tablelen, uint32);
+  serout.delay_table = NULL;
+  if (serout.lua_done_ref != LUA_NOREF) {
+    lua_rawgeti (L, LUA_REGISTRYINDEX, serout.lua_done_ref);
+    luaL_unref (L, LUA_REGISTRYINDEX, serout.lua_done_ref);
+    serout.lua_done_ref = LUA_NOREF;
+    if (lua_pcall(L, 0, 0, 0)) {
+      // Uncaught Error. Print instead of sudden reset
+      luaL_error(L, "error: %s", lua_tostring(L, -1));
+    }
+  }
+}
+
+static void ICACHE_RAM_ATTR seroutasync_cb(os_param_t p) {
+  (void) p;
+  if (serout.index < serout.tablelen) {
+    GPIO_OUTPUT_SET(GPIO_ID_PIN(pin_num[serout.pin]), serout.level);
+    serout.level = serout.level==LOW ? HIGH : LOW;
+    platform_hw_timer_arm_us(TIMER_OWNER, serout.delay_table[serout.index]);
+    serout.index++;
+    if (serout.repeats && serout.index>=serout.tablelen) {serout.index=0; serout.repeats--;}
+  } else {
+    platform_hw_timer_close(TIMER_OWNER);
+    task_post_low (serout.done_taskid, (task_param_t)0);
+  }
+}
+
 static int lgpio_serout( lua_State* L )
 {
-  unsigned clocks_per_us = system_get_cpu_freq();
-  unsigned pin = luaL_checkinteger( L, 1 );
-  unsigned level = luaL_checkinteger( L, 2 );
-  unsigned repeats = luaL_optint( L, 4, 1 );
-  unsigned table_len, i, j;
+  serout.pin = luaL_checkinteger( L, 1 );
+  serout.level = luaL_checkinteger( L, 2 );
+  serout.repeats = luaL_optint( L, 4, 1 )-1;
+  luaL_unref (L, LUA_REGISTRYINDEX, serout.lua_done_ref);
+  uint8_t is_async = FALSE;
+  if (!lua_isnoneornil(L, 5)) {
+    if (lua_isnumber(L, 5)) {
+      serout.lua_done_ref = LUA_NOREF;
+    } else {
+      lua_pushvalue(L, 5);
+      serout.lua_done_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    }
+    is_async = TRUE;
+  } else {
+    serout.lua_done_ref = LUA_NOREF;
+  }
 
-  luaL_argcheck(L, platform_gpio_exists(pin), 1, "Invalid pin");
-  luaL_argcheck(L, level==HIGH || level==LOW, 2, "Wrong arg type" );
+  if (serout.delay_table) {
+    luaM_freearray(L, serout.delay_table, serout.tablelen, uint32);
+    serout.delay_table = NULL;
+  }
+
+  luaL_argcheck(L, platform_gpio_exists(serout.pin), 1, "Invalid pin");
+  luaL_argcheck(L, serout.level==HIGH || serout.level==LOW, 2, "Wrong level type" );
   luaL_argcheck(L, lua_istable( L, 3 ) &&
-                   ((table_len = lua_objlen( L, 3 )<DELAY_TABLE_MAX_LEN)), 3, "Invalid table" );
-  luaL_argcheck(L, repeats<256, 4, "repeats >= 256" );
+                   ((serout.tablelen = lua_objlen( L, 3 )) < DELAY_TABLE_MAX_LEN), 3, "Invalid delay_times" );
 
-  uint32 *delay_table = luaM_newvector(L, table_len*repeats, uint32);
-  for( i = 1; i <= table_len; i++ )  {
+  serout.delay_table = luaM_newvector(L, serout.tablelen, uint32);
+  for(unsigned i = 0; i < serout.tablelen; i++ )  {
     lua_rawgeti( L, 3, i + 1 );
     unsigned delay = (unsigned) luaL_checkinteger( L, -1 );
-    if (delay > 1000000) return luaL_error( L, "delay %u must be < 1,000,000 us", i );
-    delay_table[i-1] = delay;
+    serout.delay_table[i] = delay;
     lua_pop( L, 1 );
   }
 
-  for( i = 0; i <= repeats; i++ )  {
-    if (!i)    // skip the first loop (presumably this is some form of icache priming??).
-      continue;
-
-    for( j = 0;j < table_len; j++ ){
-      /* Direct Write is a ROM function which already disables interrupts for the atomic bit */
-      GPIO_OUTPUT_SET(GPIO_ID_PIN(pin_num[pin]), level);
-      delayMicroseconds(delay_table[j]);
-      level = level==LOW ? HIGH : LOW;
+  if (is_async) { // async version for duration above 15 mSec
+    if (!platform_hw_timer_init(TIMER_OWNER, FRC1_SOURCE, TRUE)) {
+      // Failed to init the timer
+      luaL_error(L, "Unable to initialize timer");
     }
+    platform_hw_timer_set_func(TIMER_OWNER, seroutasync_cb, 0);
+    serout.index = 0;
+    seroutasync_cb(0);
+  } else { // sync version for sub-50 µs resolution & total duration < 15 mSec
+    do { 
+      for( serout.index = 0;serout.index < serout.tablelen; serout.index++ ){
+        NODE_DBG("%d\t%d\t%d\t%d\t%d\t%d\t%d\n", serout.repeats, serout.index, serout.level, serout.pin, serout.tablelen, serout.delay_table[serout.index], system_get_time()); // timings is delayed for short timings when debug output is enabled
+        GPIO_OUTPUT_SET(GPIO_ID_PIN(pin_num[serout.pin]), serout.level);
+        serout.level = serout.level==LOW ? HIGH : LOW;
+        delayMicroseconds(serout.delay_table[serout.index]);
+      }
+    } while (serout.repeats--);
+    luaM_freearray(L, serout.delay_table, serout.tablelen, uint32);
   }
-
-  luaM_freearray(L, delay_table, table_len, uint32);
   return 0;
 }
 #undef DELAY_TABLE_MAX_LEN
@@ -238,6 +315,8 @@ int luaopen_gpio( lua_State *L ) {
   }
   platform_gpio_init(task_get_id(gpio_intr_callback_task));
 #endif
+  serout.done_taskid = task_get_id((task_callback_t) seroutasync_done);
+  serout.lua_done_ref = LUA_NOREF;
   return 0;
 }
 

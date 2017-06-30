@@ -15,7 +15,7 @@ ifndef PDIR
 GEN_LIBS = libuser.a
 endif
 
-STD_CFLAGS=-std=gnu11 -Wno-implicit-function-declaration
+STD_CFLAGS=-std=gnu11 -Wimplicit -Wno-implicit-function-declaration
 
 #############################################################
 # Configuration i.e. compile options etc.
@@ -24,7 +24,7 @@ STD_CFLAGS=-std=gnu11 -Wno-implicit-function-declaration
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-#DEFINES += 
+DEFINES += -DESP_INIT_DATA_DEFAULT="\"$(SDK_DIR)/bin/esp_init_data_default.bin\""
 
 #############################################################
 # Recursion Magic - Don't touch this!!

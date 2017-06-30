@@ -10,18 +10,25 @@
 #ifndef __HTTPCLIENT_H__
 #define __HTTPCLIENT_H__
 
-#if defined(GLOBAL_DEBUG_ON)
-#define HTTPCLIENT_DEBUG_ON
+static const char log_prefix[] = "HTTP client: ";
+
+#if defined(DEVELOP_VERSION)
+  #define HTTPCLIENT_DEBUG_ON
 #endif
 #if defined(HTTPCLIENT_DEBUG_ON)
-#define HTTPCLIENT_DEBUG(format, ...) os_printf(format, ##__VA_ARGS__)
+  #define HTTPCLIENT_DEBUG(format, ...) dbg_printf("%s"format"\n", log_prefix, ##__VA_ARGS__)
 #else
-#define HTTPCLIENT_DEBUG(format, ...)
+  #define HTTPCLIENT_DEBUG(...)
+#endif
+#if defined(NODE_ERROR)
+  #define HTTPCLIENT_ERR(format, ...) NODE_ERR("%s"format"\n", log_prefix, ##__VA_ARGS__)
+#else
+  #define HTTPCLIENT_ERR(...)
 #endif
 
 #if defined(USES_SDK_BEFORE_V140)
-#define espconn_send espconn_sent
-#define espconn_secure_send espconn_secure_sent
+  #define espconn_send espconn_sent
+  #define espconn_secure_send espconn_secure_sent
 #endif
 
 /*
@@ -46,20 +53,20 @@
  * A successful request corresponds to an HTTP status code of 200 (OK).
  * More info at http://en.wikipedia.org/wiki/List_of_HTTP_status_codes
  */
-typedef void (* http_callback_t)(char * response_body, int http_status, char * full_response);
+typedef void (* http_callback_t)(char * response_body, int http_status, char ** full_response_p);
 
 /*
  * Call this function to skip URL parsing if the arguments are already in separate variables.
  */
-void ICACHE_FLASH_ATTR http_raw_request(const char * hostname, int port, bool secure, const char * method, const char * path, const char * headers, const char * post_data, http_callback_t callback_handle);
+void ICACHE_FLASH_ATTR http_raw_request(const char * hostname, int port, bool secure, const char * method, const char * path, const char * headers, const char * post_data, http_callback_t callback_handle, int redirect_follow_count);
 
 /*
  * Request data from URL use custom method.
  * The data should be encoded as any format.
  * Try:
- * http_request("http://httpbin.org/post", "OPTIONS", "Content-type: text/plain", "Hello world", http_callback_example);
+ * http_request("http://httpbin.org/post", "OPTIONS", "Content-type: text/plain", "Hello world", http_callback_example, 0);
  */
-void ICACHE_FLASH_ATTR http_request(const char * url, const char * method, const char * headers, const char * post_data, http_callback_t callback_handle);
+void ICACHE_FLASH_ATTR http_request(const char * url, const char * method, const char * headers, const char * post_data, http_callback_t callback_handle, int redirect_follow_count);
 
 /*
  * Post data to a web form.

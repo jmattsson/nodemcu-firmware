@@ -4,12 +4,13 @@
 | 2015-06-26 | [DiUS](https://github.com/DiUS), [Johny Mattsson](https://github.com/jmattsson), Bernd Meyer <bmeyer@dius.com.au> | [Johny Mattsson](https://github.com/jmattsson) | [rtcfifo.c](../../../app/modules/rtcfifo.c)|
 
 The rtcfifo module implements a first-in,first-out storage intended for sensor readings. As the name suggests, it is backed by the [RTC](https://en.wikipedia.org/wiki/Real-time_clock) user memory and as such survives deep sleep cycles. Conceptually it can be thought of as a cyclic array of `{ timestamp, name, value }` tuples. Internally it uses a space-optimized storage format to allow the greatest number of samples to be kept. This comes with several trade-offs, and as such is not a one-solution-fits-all. Notably:
+
 - Timestamps are stored with second-precision.
 - Sample frequency must be at least once every 8.5 minutes. This is a side-effect of delta-compression being used for the time stamps.
 - Values are limited to 16 bits of precision, but have a separate field for storing an E<sup>-n</sup> multiplier. This allows for high fidelity even when working with very small values. The effective range is thus 1E<sup>-7</sup> to 65535.
 - Sensor names are limited to a maximum of 4 characters.
 
-!!! note "Important:"
+!!! important
 
 	This module uses two sets of RTC memory slots, 10-20 for its control block, and a variable number of slots for samples and sensor names. By default these span 32-127, but this is configurable. Slots are claimed when [`rtcfifo.prepare()`](#rtcfifoprepare) is called.
 
@@ -110,17 +111,13 @@ This function takes an optional configuration table as an argument. The followin
 ```lua
 -- Initialize with default values
 rtcfifo.prepare()
-```
-```lua
 -- Use RTC slots 19 and up for variable storage
 rtcfifo.prepare({storage_begin=21, storage_end=128})
 ```
 
 ####See also
-[`rtcfifo.ready()`](#rtcfifoready)
-
-####See also
-[`rtcfifo.prepare()`](#rtcfifoprepare)
+- [`rtcfifo.ready()`](#rtcfifoready)
+- [`rtcfifo.prepare()`](#rtcfifoprepare)
 
 ## rtcfifo.put()
 

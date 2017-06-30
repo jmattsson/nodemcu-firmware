@@ -1,15 +1,17 @@
 #ifndef __CPU_ESP8266_H__
 #define __CPU_ESP8266_H__
 
+#ifndef NO_CPU_ESP8266_INCLUDE
 #include "os_type.h"
 #include "spi_flash.h"
 #include "pin_map.h"
 #include "user_config.h"
 #include "flash_api.h"
+#endif
 // Number of resources (0 if not available/not implemented)
 #define NUM_GPIO              GPIO_PIN_NUM
 #define NUM_SPI               2
-#define NUM_UART              1
+#define NUM_UART              2
 #define NUM_PWM               GPIO_PIN_NUM
 #define NUM_ADC               1
 #define NUM_CAN               0
@@ -30,15 +32,12 @@
 #elif defined(FLASH_16M)
 #define FLASH_SEC_NUM 	0x1000
 #elif defined(FLASH_AUTOSIZE)
-#if defined(FLASH_SAFE_API)
-#define FLASH_SEC_NUM 	(flash_safe_get_sec_num())
-#else
 #define FLASH_SEC_NUM 	(flash_rom_get_sec_num())
-#endif // defined(FLASH_SAFE_API)
 #else
 #define FLASH_SEC_NUM 	0x80
 #endif
-#define SYS_PARAM_SEC_NUM 4
+// SDK 1.5.4.1 added 1 sector for rf_cal
+#define SYS_PARAM_SEC_NUM 5
 #define SYS_PARAM_SEC_START (FLASH_SEC_NUM - SYS_PARAM_SEC_NUM)
 
 #define INTERNAL_FLASH_SECTOR_SIZE      SPI_FLASH_SEC_SIZE
@@ -52,15 +51,9 @@
 // SpiFlashOpResult spi_flash_erase_sector(uint16 sec);
 // SpiFlashOpResult spi_flash_write(uint32 des_addr, uint32 *src_addr, uint32 size);
 // SpiFlashOpResult spi_flash_read(uint32 src_addr, uint32 *des_addr, uint32 size);
-#if defined(FLASH_SAFE_API)
-#define flash_write flash_safe_write
-#define flash_erase flash_safe_erase_sector
-#define flash_read flash_safe_read
-#else
 #define flash_write spi_flash_write
 #define flash_erase spi_flash_erase_sector
 #define flash_read spi_flash_read
-#endif // defined(FLASH_SAFE_API)
 
 #define CACHE_FLASH_CTRL_REG         0x3ff0000c
 #define CACHE_FLASH_ACTIVE           0x00000100

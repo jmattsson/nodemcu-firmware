@@ -116,13 +116,23 @@
 #define SPIFFS_ERR_CHECK_FLAGS_BAD      (SPIFFS_ERR_INTERNAL - 3)
 #define _SPIFFS_ERR_CHECK_LAST          (SPIFFS_ERR_INTERNAL - 4)
 
+// visitor result, continue searching
 #define SPIFFS_VIS_COUNTINUE            (SPIFFS_ERR_INTERNAL - 20)
+// visitor result, continue searching after reloading lu buffer
 #define SPIFFS_VIS_COUNTINUE_RELOAD     (SPIFFS_ERR_INTERNAL - 21)
+// visitor result, stop searching
 #define SPIFFS_VIS_END                  (SPIFFS_ERR_INTERNAL - 22)
 
-#define SPIFFS_EV_IX_UPD                0
-#define SPIFFS_EV_IX_NEW                1
-#define SPIFFS_EV_IX_DEL                2
+// updating an object index contents
+#define SPIFFS_EV_IX_UPD                (0)
+// creating a new object index
+#define SPIFFS_EV_IX_NEW                (1)
+// deleting an object index
+#define SPIFFS_EV_IX_DEL                (2)
+// moving an object index without updating contents
+#define SPIFFS_EV_IX_MOV                (3)
+// updating an object index header data only, not the table itself
+#define SPIFFS_EV_IX_UPD_HDR            (4)
 
 #define SPIFFS_OBJ_ID_IX_FLAG           ((spiffs_obj_id)(1<<(8*sizeof(spiffs_obj_id)-1)))
 
@@ -131,7 +141,15 @@
 #define SPIFFS_OBJ_ID_DELETED           ((spiffs_obj_id)0)
 #define SPIFFS_OBJ_ID_FREE              ((spiffs_obj_id)-1)
 
-#define SPIFFS_MAGIC(fs)                ((spiffs_obj_id)(0x20140529 ^ SPIFFS_CFG_LOG_PAGE_SZ(fs)))
+#if SPIFFS_USE_MAGIC
+#if !SPIFFS_USE_MAGIC_LENGTH
+#define SPIFFS_MAGIC(fs, bix)           \
+  ((spiffs_obj_id)(0x20140529 ^ SPIFFS_CFG_LOG_PAGE_SZ(fs)))
+#else // SPIFFS_USE_MAGIC_LENGTH
+#define SPIFFS_MAGIC(fs, bix)           \
+  ((spiffs_obj_id)(0x20140529 ^ SPIFFS_CFG_LOG_PAGE_SZ(fs) ^ ((fs)->block_count - (bix))))
+#endif // SPIFFS_USE_MAGIC_LENGTH
+#endif // SPIFFS_USE_MAGIC
 
 #define SPIFFS_CONFIG_MAGIC             (0x20090315)
 
@@ -220,7 +238,9 @@
 // object index span index number for given data span index or entry
 #define SPIFFS_OBJ_IX_ENTRY_SPAN_IX(fs, spix) \
   ((spix) < SPIFFS_OBJ_HDR_IX_LEN(fs) ? 0 : (1+((spix)-SPIFFS_OBJ_HDR_IX_LEN(fs))/SPIFFS_OBJ_IX_LEN(fs)))
-
+// get data span index for object index span index
+#define SPIFFS_DATA_SPAN_IX_FOR_OBJ_IX_SPAN_IX(fs, spix) \
+  ( (spix) == 0 ? 0 : (SPIFFS_OBJ_HDR_IX_LEN(fs) + (((spix)-1) * SPIFFS_OBJ_IX_LEN(fs))) )
 
 #define SPIFFS_OP_T_OBJ_LU    (0<<0)
 #define SPIFFS_OP_T_OBJ_LU2   (1<<0)
@@ -264,26 +284,26 @@
 #define SPIFFS_API_CHECK_MOUNT(fs) \
   if (!SPIFFS_CHECK_MOUNT((fs))) { \
     (fs)->err_code = SPIFFS_ERR_NOT_MOUNTED; \
-    return -1; \
+    return SPIFFS_ERR_NOT_MOUNTED; \
   }
 
 #define SPIFFS_API_CHECK_CFG(fs) \
   if (!SPIFFS_CHECK_CFG((fs))) { \
     (fs)->err_code = SPIFFS_ERR_NOT_CONFIGURED; \
-    return -1; \
+    return SPIFFS_ERR_NOT_CONFIGURED; \
   }
 
 #define SPIFFS_API_CHECK_RES(fs, res) \
   if ((res) < SPIFFS_OK) { \
     (fs)->err_code = (res); \
-    return -1; \
+    return (res); \
   }
 
 #define SPIFFS_API_CHECK_RES_UNLOCK(fs, res) \
   if ((res) < SPIFFS_OK) { \
     (fs)->err_code = (res); \
     SPIFFS_UNLOCK(fs); \
-    return -1; \
+    return (res); \
   }
 
 #define SPIFFS_VALIDATE_OBJIX(ph, objid, spix) \
@@ -304,12 +324,32 @@
     if ((ph).span_ix != (spix)) return SPIFFS_ERR_DATA_SPAN_MISMATCH;
 
 
-// check id
+// check id, only visit matching objec ids
 #define SPIFFS_VIS_CHECK_ID     (1<<0)
 // report argument object id to visitor - else object lookup id is reported
 #define SPIFFS_VIS_CHECK_PH     (1<<1)
 // stop searching at end of all look up pages
 #define SPIFFS_VIS_NO_WRAP      (1<<2)
+
+#if SPIFFS_HAL_CALLBACK_EXTRA
+
+#define SPIFFS_HAL_WRITE(_fs, _paddr, _len, _src) \
+  (_fs)->cfg.hal_write_f((_fs), (_paddr), (_len), (_src))
+#define SPIFFS_HAL_READ(_fs, _paddr, _len, _dst) \
+  (_fs)->cfg.hal_read_f((_fs), (_paddr), (_len), (_dst))
+#define SPIFFS_HAL_ERASE(_fs, _paddr, _len) \
+  (_fs)->cfg.hal_erase_f((_fs), (_paddr), (_len))
+
+#else // SPIFFS_HAL_CALLBACK_EXTRA
+
+#define SPIFFS_HAL_WRITE(_fs, _paddr, _len, _src) \
+  (_fs)->cfg.hal_write_f((_paddr), (_len), (_src))
+#define SPIFFS_HAL_READ(_fs, _paddr, _len, _dst) \
+  (_fs)->cfg.hal_read_f((_paddr), (_len), (_dst))
+#define SPIFFS_HAL_ERASE(_fs, _paddr, _len) \
+  (_fs)->cfg.hal_erase_f((_paddr), (_len))
+
+#endif // SPIFFS_HAL_CALLBACK_EXTRA
 
 #if SPIFFS_CACHE
 
@@ -397,6 +437,16 @@ typedef struct {
 #if SPIFFS_CACHE_WR
   spiffs_cache_page *cache_page;
 #endif
+#if SPIFFS_TEMPORAL_FD_CACHE
+  // djb2 hash of filename
+  u32_t name_hash;
+  // hit score (score == 0 indicates never used fd)
+  u16_t score;
+#endif
+#if SPIFFS_IX_MAP
+  // spiffs index map, if 0 it means unmapped
+  spiffs_ix_map *ix_map;
+#endif
 } spiffs_fd;
 
 
@@ -416,25 +466,35 @@ typedef struct __attribute(( packed )) {
 
 // object index header page header
 typedef struct __attribute(( packed ))
+#if SPIFFS_ALIGNED_OBJECT_INDEX_TABLES
+                __attribute(( aligned(sizeof(spiffs_page_ix)) ))
+#endif
 {
   // common page header
   spiffs_page_header p_hdr;
+  // alignment
+  u8_t _align[4 - ((sizeof(spiffs_page_header)&3)==0 ? 4 : (sizeof(spiffs_page_header)&3))];
   // size of object
   u32_t size;
   // type of object
   spiffs_obj_type type;
   // name of object
   u8_t name[SPIFFS_OBJ_NAME_LEN];
+#if SPIFFS_OBJ_META_LEN
+  // metadata. not interpreted by SPIFFS in any way.
+  u8_t meta[SPIFFS_OBJ_META_LEN];
+#endif
 } spiffs_page_object_ix_header;
 
 // object index page header
 typedef struct __attribute(( packed )) {
  spiffs_page_header p_hdr;
+ u8_t _align[4 - ((sizeof(spiffs_page_header)&3)==0 ? 4 : (sizeof(spiffs_page_header)&3))];
 } spiffs_page_object_ix;
 
 // callback func for object lookup visitor
 typedef s32_t (*spiffs_visitor_f)(spiffs *fs, spiffs_obj_id id, spiffs_block_ix bix, int ix_entry,
-    u32_t user_data, void *user_p);
+    const void *user_const_p, void *user_var_p);
 
 
 #if SPIFFS_CACHE
@@ -495,14 +555,19 @@ s32_t spiffs_obj_lu_find_entry_visitor(
     u8_t flags,
     spiffs_obj_id obj_id,
     spiffs_visitor_f v,
-    u32_t user_data,
-    void *user_p,
+    const void *user_const_p,
+    void *user_var_p,
     spiffs_block_ix *block_ix,
     int *lu_entry);
 
 s32_t spiffs_erase_block(
     spiffs *fs,
     spiffs_block_ix bix);
+
+#if SPIFFS_USE_MAGIC && SPIFFS_USE_MAGIC_LENGTH
+s32_t spiffs_probe(
+    spiffs_config *cfg);
+#endif // SPIFFS_USE_MAGIC && SPIFFS_USE_MAGIC_LENGTH
 
 // ---------------
 
@@ -512,7 +577,7 @@ s32_t spiffs_obj_lu_scan(
 s32_t spiffs_obj_lu_find_free_obj_id(
     spiffs *fs,
     spiffs_obj_id *obj_id,
-    u8_t *conflicting_name);
+    const u8_t *conflicting_name);
 
 s32_t spiffs_obj_lu_find_free(
     spiffs *fs,
@@ -573,7 +638,8 @@ s32_t spiffs_page_delete(
 s32_t spiffs_object_create(
     spiffs *fs,
     spiffs_obj_id obj_id,
-    u8_t name[SPIFFS_OBJ_NAME_LEN],
+    const u8_t name[],
+    const u8_t meta[],
     spiffs_obj_type type,
     spiffs_page_ix *objix_hdr_pix);
 
@@ -583,13 +649,24 @@ s32_t spiffs_object_update_index_hdr(
     spiffs_obj_id obj_id,
     spiffs_page_ix objix_hdr_pix,
     u8_t *new_objix_hdr_data,
-    u8_t name[SPIFFS_OBJ_NAME_LEN],
+    const u8_t name[],
+    const u8_t meta[],
     u32_t size,
     spiffs_page_ix *new_pix);
 
-void spiffs_cb_object_event(
+#if SPIFFS_IX_MAP
+
+s32_t spiffs_populate_ix_map(
     spiffs *fs,
     spiffs_fd *fd,
+    u32_t vec_entry_start,
+    u32_t vec_entry_end);
+
+#endif
+
+void spiffs_cb_object_event(
+    spiffs *fs,
+    spiffs_page_object_ix *objix,
     int ev,
     spiffs_obj_id obj_id,
     spiffs_span_ix spix,
@@ -635,7 +712,7 @@ s32_t spiffs_object_truncate(
 
 s32_t spiffs_object_find_object_index_header_by_name(
     spiffs *fs,
-    u8_t name[SPIFFS_OBJ_NAME_LEN],
+    const u8_t name[SPIFFS_OBJ_NAME_LEN],
     spiffs_page_ix *pix);
 
 // ---------------
@@ -665,7 +742,8 @@ s32_t spiffs_gc_quick(
 
 s32_t spiffs_fd_find_new(
     spiffs *fs,
-    spiffs_fd **fd);
+    spiffs_fd **fd,
+    const char *name);
 
 s32_t spiffs_fd_return(
     spiffs *fs,
@@ -675,6 +753,13 @@ s32_t spiffs_fd_get(
     spiffs *fs,
     spiffs_file f,
     spiffs_fd **fd);
+
+#if SPIFFS_TEMPORAL_FD_CACHE
+void spiffs_fd_temporal_cache_rehash(
+    spiffs *fs,
+    const char *old_path,
+    const char *new_path);
+#endif
 
 #if SPIFFS_CACHE
 void spiffs_cache_init(

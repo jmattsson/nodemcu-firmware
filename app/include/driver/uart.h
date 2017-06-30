@@ -41,6 +41,7 @@ typedef enum {
     BIT_RATE_4800    = 4800,
     BIT_RATE_9600    = 9600,
     BIT_RATE_19200   = 19200,
+    BIT_RATE_31250   = 31250,
     BIT_RATE_38400   = 38400,
     BIT_RATE_57600   = 57600,
     BIT_RATE_74880   = 74880,
@@ -101,12 +102,22 @@ typedef struct {
     int                      buff_uart_no;  //indicate which uart use tx/rx buffer
 } UartDevice;
 
-void uart_init(UartBautRate uart0_br, UartBautRate uart1_br, os_signal_t sig_input);
+typedef struct {
+    UartBautRate      baut_rate;
+    UartBitsNum4Char  data_bits;
+    UartExistParity   exist_parity;
+    UartParityMode    parity;   
+    UartStopBitsNum   stop_bits;
+} UartConfig;
+
+void uart_init(UartBautRate uart0_br, UartBautRate uart1_br, os_signal_t sig_input, uint8 *flag_input);
+UartConfig uart_get_config(uint8 uart_no);
 void uart0_alt(uint8 on);
 void uart0_sendStr(const char *str);
 void uart0_putc(const char c);
 void uart0_tx_buffer(uint8 *buf, uint16 len);
 void uart_setup(uint8 uart_no);
 STATUS uart_tx_one_char(uint8 uart, uint8 TxChar);
+void uart_set_alt_output_uart0(void (*fn)(char));
 #endif
 

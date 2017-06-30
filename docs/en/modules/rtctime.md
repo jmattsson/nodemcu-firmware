@@ -15,7 +15,7 @@ To enable this module, it needs to be given a reference time at least once (via 
 
 Note that while the rtctime module can keep time across deep sleeps, it *will* lose the time if the module is unexpectedly reset.
 
-!!! note "Important:"
+!!! important
 
     This module uses RTC memory slots 0-9, inclusive. As soon as [`rtctime.set()`](#rtctimeset) (or [`sntp.sync()`](sntp.md#sntpsync)) has been called these RTC memory slots will be used.
 
@@ -24,6 +24,7 @@ This is a companion module to the [rtcmem](rtcmem.md) and [SNTP](sntp.md) module
 ## rtctime.dsleep()
 
 Puts the ESP8266 into deep sleep mode, like [`node.dsleep()`](node.md#nodedsleep). It differs from [`node.dsleep()`](node.md#nodedsleep) in the following ways:
+
 - Time is kept across the deep sleep. I.e. [`rtctime.get()`](#rtctimeget) will keep working (provided time was available before the sleep).
 - This call never returns. The module is put to sleep immediately. This is both to support accurate time keeping and to reduce power consumption.
 - The time slept will generally be considerably more accurate than with [`node.dsleep()`](node.md#nodedsleep).
@@ -54,7 +55,7 @@ rtctime.dsleep(5000000, 4)
 For applications where it is necessary to take samples with high regularity, this function is useful. It provides an easy way to implement a "wake up on the next 5-minute boundary" scheme, without having to explicitly take into account how long the module has been active for etc before going back to sleep.
 
 #### Syntax
-`rtctime.dsleep(aligned_us, minsleep_us [, option])`
+`rtctime.dsleep_aligned(aligned_us, minsleep_us [, option])`
 
 #### Parameters
 - `aligned_us` boundary interval in microseconds
@@ -65,6 +66,34 @@ For applications where it is necessary to take samples with high regularity, thi
 ```lua
 -- sleep at least 3 seconds, then wake up on the next 5-second boundary
 rtctime.dsleep_aligned(5*1000000, 3*1000000)
+```
+
+## rtctime.epoch2cal()
+
+Converts a Unix timestamp to calendar format. Neither timezone nor DST correction is performed - the result is UTC time.
+
+#### Syntax
+`rtctime.epoch2cal(timestamp)`
+
+#### Parameters
+`timestamp` seconds since Unix epoch
+
+#### Returns
+A table containing the fields:
+
+- `year` 1970 ~ 2038
+- `mon` month 1 ~ 12 in current year
+- `day` day 1 ~ 31 in current month
+- `hour`
+- `min`
+- `sec`
+- `yday` day 1 ~ 366 in current year
+- `wday` day 1 ~ 7 in current weak (Sunday is 1)
+
+#### Example
+```lua
+tm = rtctime.epoch2cal(rtctime.get())
+print(string.format("%04d/%02d/%02d %02d:%02d:%02d", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"]))
 ```
 
 ## rtctime.get()

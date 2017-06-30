@@ -24,7 +24,6 @@ coap_queue_t *gQueue = NULL;
 
 typedef struct lcoap_userdata
 {
-  lua_State *L;
   struct espconn *pesp_conn;
   int self_ref;
 }lcoap_userdata;
@@ -103,7 +102,6 @@ static int coap_create( lua_State* L, const char* mt )
   pesp_conn->state = ESPCONN_NONE;
   NODE_DBG("UDP server/client is set.\n");
 
-  cud->L = L;
   pesp_conn->reverse = cud;
 
   NODE_DBG("coap_create is called.\n");
@@ -129,7 +127,6 @@ static int coap_delete( lua_State* L, const char* mt )
     cud->self_ref = LUA_NOREF;
   }
 
-  cud->L = NULL;
   if(cud->pesp_conn)
   {
     if(cud->pesp_conn->proto.udp->remote_port || cud->pesp_conn->proto.udp->local_port)
@@ -326,7 +323,7 @@ static int coap_request( lua_State* L, coap_method_t m )
   stack++;
   pesp_conn = cud->pesp_conn;
   ip_addr_t ipaddr;
-  uint8_t host[32];
+  uint8_t host[64];
 
   unsigned t;
   if ( lua_isnumber(L, stack) )
@@ -348,6 +345,9 @@ static int coap_request( lua_State* L, coap_method_t m )
   coap_uri_t *uri = coap_new_uri(url, l);   // should call free(uri) somewhere
   if (uri == NULL)
     return luaL_error( L, "uri wrong format." );
+  if (uri->host.length + 1 /* for the null */ > sizeof(host)) {
+    return luaL_error(L, "host too long");
+  }
 
   pesp_conn->proto.udp->remote_port = uri->port;
   NODE_DBG("UDP port is set: %d.\n", uri->port);
@@ -459,10 +459,8 @@ static int coap_regist( lua_State* L, const char* mt, int isvar )
       return luaL_error(L, "not enough memory");
     h->next = NULL;
     h->name = NULL;
-    h->L = NULL;
   }  
 
-  h->L = L;
   h->name = name;
   h->content_type = content_type;
 

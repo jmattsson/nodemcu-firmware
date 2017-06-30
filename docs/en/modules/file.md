@@ -5,32 +5,45 @@
 
 The file module provides access to the file system and its individual files.
 
-The file system is a flat file system, with no notion of directories/folders.
+The file system is a flat file system, with no notion of subdirectories/folders.
 
-Only one file can be open at any given time.
+Besides the SPIFFS file system on internal flash, this module can also access FAT partitions on an external SD card if [FatFS is enabled](../sdcard.md).
 
-## file.close()
+```lua
+-- open file in flash:
+if file.open("init.lua") then
+  print(file.read())
+  file.close()
+end
 
-Closes the open file, if any.
+-- or with full pathspec
+file.open("/FLASH/init.lua")
+
+-- open file on SD card
+if file.open("/SD0/somefile.txt") then
+  print(file.read())
+  file.close()
+end
+```
+
+## file.chdir()
+
+Change current directory (and drive). This will be used when no drive/directory is prepended to filenames.
+
+Current directory defaults to the root of internal SPIFFS (`/FLASH`) after system start.
+
+!!! note
+
+    Function is only available when [FatFS support](../sdcard.md#enabling-fatfs) is compiled into the firmware.
 
 #### Syntax
-`file.close()`
+`file.chdir(dir)`
 
 #### Parameters
-none
+`dir` directory name - `/FLASH`, `/SD0`, `/SD1`, etc.
 
 #### Returns
-`nil`
-
-#### Example
-```lua
--- open 'init.lua', print the first line.
-file.open("init.lua", "r")
-print(file.readline())
-file.close()
-```
-#### See also
-[`file.open()`](#fileopen)
+`true` on success, `false` otherwise
 
 ## file.exists()
 
@@ -60,36 +73,13 @@ end
 #### See also
 [`file.list()`](#filelist)
 
-## file.flush()
-
-Flushes any pending writes to the file system, ensuring no data is lost on a restart. Closing the open file using [`file.close()`](#fileclose) performs an implicit flush as well.
-
-#### Syntax
-`file.flush()`
-
-#### Parameters
-none
-
-#### Returns
-`nil`
-
-#### Example
-```lua
--- open 'init.lua' in 'a+' mode
-file.open("init.lua", "a+")
--- write 'foo bar' to the end of the file
-file.write('foo bar')
-file.flush()
--- write 'baz' too
-file.write('baz')
-file.close()
-```
-#### See also
-[`file.close()`](#fileclose)
-
 ## file.format()
 
 Format the file system. Completely erases any existing file system and writes a new one. Depending on the size of the flash chip in the ESP, this may take several seconds.
+
+!!! note
+
+    Function is not supported for SD cards.
 
 #### Syntax
 `file.format()`
@@ -106,6 +96,10 @@ none
 ## file.fscfg ()
 
 Returns the flash address and physical size of the file system area, in bytes.
+
+!!! note
+
+    Function is not supported for SD cards.
 
 #### Syntax
 `file.fscfg()`
@@ -124,7 +118,7 @@ print(string.format("0x%x", file.fscfg()))
 
 ## file.fsinfo()
 
-Return size information for the file system, in bytes.
+Return size information for the file system. The unit is Byte for SPIFFS and kByte for FatFS.
 
 #### Syntax
 `file.fsinfo()`
@@ -142,7 +136,7 @@ none
 ```lua
 -- get file system info
 remaining, used, total=file.fsinfo()
-print("\nFile system info:\nTotal : "..total.." Bytes\nUsed : "..used.." Bytes\nRemain: "..remaining.." Bytes\n")
+print("\nFile system info:\nTotal : "..total.." (k)Bytes\nUsed : "..used.." (k)Bytes\nRemain: "..remaining.." (k)Bytes\n")
 ```
 
 ## file.list()
@@ -166,6 +160,63 @@ for k,v in pairs(l) do
 end
 ```
 
+## file.mount()
+
+Mounts a FatFs volume on SD card.
+
+!!! note
+
+    Function is only available when [FatFS support](../sdcard.md#enabling-fatfs) is compiled into the firmware and it is not supported for internal flash.
+
+#### Syntax
+`file.mount(ldrv[, pin])`
+
+#### Parameters
+- `ldrv` name of the logical drive, `/SD0`, `/SD1`, etc.
+- `pin` 1~12, IO index for SS/CS, defaults to 8 if omitted.
+
+#### Returns
+Volume object
+
+#### Example
+```lua
+vol = file.mount("/SD0")
+vol:umount()
+```
+
+## file.on()
+
+Registers callback functions.
+
+Trigger events are:
+
+- `rtc` deliver current date & time to the file system. Function is expected to return a table containing the fields `year`, `mon`, `day`, `hour`, `min`, `sec` of current date and time. Not supported for internal flash.
+
+#### Syntax
+`file.on(event[, function()])`
+
+#### Parameters
+- `event` string
+- `function()` callback function. Unregisters the callback if `function()` is omitted.
+
+#### Returns
+`nil`
+
+#### Example
+```lua
+sntp.sync(server_ip,
+  function()
+    print("sntp time sync ok")
+    file.on("rtc",
+      function()
+        return rtctime.epoch2cal(rtctime.get())
+      end)
+  end)
+```
+
+#### See also
+[`rtctime.epoch2cal()`](rtctime.md#rtctimeepoch2cal)
+
 ## file.open()
 
 Opens a file for access, potentially creating it (for write modes).
@@ -176,7 +227,7 @@ When done with the file, it must be closed using `file.close()`.
 `file.open(filename, mode)`
 
 #### Parameters
-- `filename` file to be opened, directories are not supported
+- `filename` file to be opened
 - `mode`:
     - "r": read mode (the default)
     - "w": write mode
@@ -186,76 +237,29 @@ When done with the file, it must be closed using `file.close()`.
     - "a+": append update mode, previous data is preserved, writing is only allowed at the end of file
 
 #### Returns
-`nil` if file not opened, or not exists (read modes).  `true` if file opened ok.
+file object if file opened ok. `nil` if file not opened, or not exists (read modes).
 
-#### Example
+#### Example (basic model)
 ```lua
 -- open 'init.lua', print the first line.
-file.open("init.lua", "r")
-print(file.readline())
-file.close()
+if file.open("init.lua", "r") then
+  print(file.readline())
+  file.close()
+end
 ```
-#### See also
-- [`file.close()`](#fileclose)
-- [`file.readline()`](#filereadline)
-
-## file.read()
-
-Read content from the open file.
-
-#### Syntax
-`file.read([n_or_str])`
-
-#### Parameters
-- `n_or_str`:
-	- if nothing passed in, read up to `LUAL_BUFFERSIZE` bytes (default 1024) or the entire file (whichever is smaller)
-	- if passed a number n, then read the file until the lesser of `n` bytes, `LUAL_BUFFERSIZE` bytes, or EOF is reached. Specifying a number larger than the buffer size will read the buffer size.
-	- if passed a string `str`, then read until `str` appears next in the file, `LUAL_BUFFERSIZE` bytes have been read, or EOF is reached
-
-#### Returns
-File content as a string, or nil when EOF
-
-#### Example
+#### Example (object model)
 ```lua
--- print the first line of 'init.lua'
-file.open("init.lua", "r")
-print(file.read('\n'))
-file.close()
-
--- print the first 5 bytes of 'init.lua'
-file.open("init.lua", "r")
-print(file.read(5))
-file.close()
+-- open 'init.lua', print the first line.
+fd = file.open("init.lua", "r")
+if fd then
+  print(fd:readline())
+  fd:close(); fd = nil
+end
 ```
 
 #### See also
-- [`file.open()`](#fileopen)
-- [`file.readline()`](#filereadline)
-
-## file.readline()
-
-Read the next line from the open file. Lines are defined as zero or more bytes ending with a EOL ('\n') byte. If the next line is longer than `LUAL_BUFFERSIZE`, this function only returns the first `LUAL_BUFFERSIZE` bytes (this is 1024 bytes by default).
-
-#### Syntax
-`file.readline()`
-
-#### Parameters
-none
-
-#### Returns
-File content in string, line by line, including EOL('\n'). Return `nil` when EOF.
-
-#### Example
-```lua
--- print the first line of 'init.lua'
-file.open("init.lua", "r")
-print(file.readline())
-file.close()
-```
-#### See also
-- [`file.open()`](#fileopen)
-- [`file.close()`](#fileclose)
-- [`file.read()`](#filereade)
+- [`file.close()`](#fileclose-fileobjclose)
+- [`file.readline()`](#filereadline-fileobjreadline)
 
 ## file.remove()
 
@@ -300,11 +304,233 @@ Renames a file. If a file is currently open, it will be closed first.
 file.rename("temp.lua","init.lua")
 ```
 
-## file.seek()
+## file.stat()
+
+Get attribtues of a file or directory in a table. Elements of the table are:
+
+- `size` file size in bytes
+- `name` file name
+- `time` table with time stamp information. Default is 1970-01-01 00:00:00 in case time stamps are not supported (on SPIFFS).
+
+    - `year`
+    - `mon`
+    - `day`
+    - `hour`
+    - `min`
+    - `sec`
+
+- `is_dir` flag `true` if item is a directory, otherwise `false`
+- `is_rdonly` flag `true` if item is read-only, otherwise `false`
+- `is_hidden` flag `true` if item is hidden, otherwise `false`
+- `is_sys` flag `true` if item is system, otherwise `false`
+- `is_arch` flag `true` if item is archive, otherwise `false`
+
+#### Syntax
+`file.stat(filename)`
+
+#### Parameters
+`filename` file name
+
+#### Returns
+table containing file attributes
+
+#### Example
+
+```lua
+s = file.stat("/SD0/myfile")
+print("name: " .. s.name)
+print("size: " .. s.size)
+
+t = s.time
+print(string.format("%02d:%02d:%02d", t.hour, t.min, t.sec))
+print(string.format("%04d-%02d-%02d", t.year, t.mon, t.day))
+
+if s.is_dir then print("is directory") else print("is file") end
+if s.is_rdonly then print("is read-only") else print("is writable") end
+if s.is_hidden then print("is hidden") else print("is not hidden") end
+if s.is_sys then print("is system") else print("is not system") end
+if s.is_arch then print("is archive") else print("is not archive") end
+
+s = nil
+t = nil
+```
+
+# File access functions
+
+The `file` module provides several functions to access the content of a file after it has been opened with [`file.open()`](#fileopen). They can be used as part of a basic model or an object model:
+
+## Basic model
+In the basic model there is max one file opened at a time. The file access functions operate on this file per default. If another file is opened, the previous default file needs to be closed beforehand.
+
+```lua
+-- open 'init.lua', print the first line.
+if file.open("init.lua", "r") then
+  print(file.readline())
+  file.close()
+end
+```
+
+## Object model
+Files are represented by file objects which are created by `file.open()`. File access functions are available as methods of this object, and multiple file objects can coexist.
+
+```lua
+src = file.open("init.lua", "r")
+if src then
+  dest = file.open("copy.lua", "w")
+  if dest then
+    local line
+    repeat
+      line = src:read()
+      if line then
+        dest:write(line)
+      end
+    until line == nil
+    dest:close(); dest = nil
+  end
+  src:close(); dest = nil
+end
+```
+
+!!! Attention
+
+    It is recommended to use only one single model within the application. Concurrent use of both models can yield unpredictable behavior: Closing the default file from basic model will also close the correspoding file object. Closing a file from object model will also close the default file if they are the same file.
+
+!!! Note
+
+    The maximum number of open files on SPIFFS is determined at compile time by `SPIFFS_MAX_OPEN_FILES` in `user_config.h`.
+
+## file.close(), file.obj:close()
+
+Closes the open file, if any.
+
+#### Syntax
+`file.close()`
+
+`fd:close()`
+
+#### Parameters
+none
+
+#### Returns
+`nil`
+
+#### See also
+[`file.open()`](#fileopen)
+
+## file.flush(), file.obj:flush()
+
+Flushes any pending writes to the file system, ensuring no data is lost on a restart. Closing the open file using [`file.close()` / `fd:close()`](#fileclose-fileobjclose) performs an implicit flush as well.
+
+#### Syntax
+`file.flush()`
+
+`fd:flush()`
+
+#### Parameters
+none
+
+#### Returns
+`nil`
+
+#### Example (basic model)
+```lua
+-- open 'init.lua' in 'a+' mode
+if file.open("init.lua", "a+") then
+  -- write 'foo bar' to the end of the file
+  file.write('foo bar')
+  file.flush()
+  -- write 'baz' too
+  file.write('baz')
+  file.close()
+end
+```
+
+#### See also
+[`file.close()` / `file.obj:close()`](#fileclose-fileobjclose)
+
+## file.read(), file.obj:read()
+
+Read content from the open file.
+
+!!! note
+
+    The function temporarily allocates 2 * (number of requested bytes) on the heap for buffering and processing the read data. Default chunk size (`FILE_READ_CHUNK`) is 1024 bytes and is regarded to be safe. Pushing this by 4x or more can cause heap overflows depending on the application. Consider this when selecting a value for parameter `n_or_char`.
+
+#### Syntax
+`file.read([n_or_char])`
+
+`fd:read([n_or_char])`
+
+#### Parameters
+- `n_or_char`:
+	- if nothing passed in, then read up to `FILE_READ_CHUNK` bytes or the entire file (whichever is smaller).
+	- if passed a number `n`, then read up to `n` bytes or the entire file (whichever is smaller).
+	- if passed a string containing the single character `char`, then read until `char` appears next in the file, `FILE_READ_CHUNK` bytes have been read, or EOF is reached.
+
+#### Returns
+File content as a string, or nil when EOF
+
+#### Example (basic model)
+```lua
+-- print the first line of 'init.lua'
+if file.open("init.lua", "r") then
+  print(file.read('\n'))
+  file.close()
+end
+```
+
+#### Example (object model)
+```lua
+-- print the first 5 bytes of 'init.lua'
+fd = file.open("init.lua", "r")
+if fd then
+  print(fd:read(5))
+  fd:close(); fd = nil
+end
+```
+
+#### See also
+- [`file.open()`](#fileopen)
+- [`file.readline()` / `file.obj:readline()`](#filereadline-fileobjreadline)
+
+## file.readline(), file.obj:readline()
+
+Read the next line from the open file. Lines are defined as zero or more bytes ending with a EOL ('\n') byte. If the next line is longer than 1024, this function only returns the first 1024 bytes.
+
+#### Syntax
+`file.readline()`
+
+`fd:readline()`
+
+#### Parameters
+none
+
+#### Returns
+File content in string, line by line, including EOL('\n'). Return `nil` when EOF.
+
+#### Example (basic model)
+```lua
+-- print the first line of 'init.lua'
+if file.open("init.lua", "r") then
+  print(file.readline())
+  file.close()
+end
+```
+
+#### See also
+- [`file.open()`](#fileopen)
+- [`file.close()` / `file.obj:close()`](#fileclose-fileobjclose)
+- [`file.read()` / `file.obj:read()`](#fileread-fileobjread)
+
+
+## file.seek(), file.obj:seek()
+
 Sets and gets the file position, measured from the beginning of the file, to the position given by offset plus a base specified by the string whence.
 
 #### Syntax
 `file.seek([whence [, offset]])`
+
+`fd:seek([whence [, offset]])`
 
 #### Parameters
 - `whence`
@@ -318,23 +544,26 @@ If no parameters are given, the function simply returns the current file offset.
 #### Returns
 the resulting file position, or `nil` on error
 
-#### Example
+#### Example (basic model)
 ```lua
-file.open("init.lua", "r")
--- skip the first 5 bytes of the file
-file.seek("set", 5)
-print(file.readline())
-file.close()
+if file.open("init.lua", "r") then
+  -- skip the first 5 bytes of the file
+  file.seek("set", 5)
+  print(file.readline())
+  file.close()
+end
 ```
 #### See also
 [`file.open()`](#fileopen)
 
-## file.write()
+## file.write(), file.obj:write()
 
 Write a string to the open file.
 
 #### Syntax
 `file.write(string)`
+
+`fd:write(string)`
 
 #### Parameters
 `string` content to be write to file
@@ -342,25 +571,39 @@ Write a string to the open file.
 #### Returns
 `true` if the write is ok, `nil` on error
 
-#### Example
+#### Example (basic model)
 ```lua
 -- open 'init.lua' in 'a+' mode
-file.open("init.lua", "a+")
--- write 'foo bar' to the end of the file
-file.write('foo bar')
-file.close()
+if file.open("init.lua", "a+") then
+  -- write 'foo bar' to the end of the file
+  file.write('foo bar')
+  file.close()
+end
+```
+
+#### Example (object model)
+```lua
+-- open 'init.lua' in 'a+' mode
+fd = file.open("init.lua", "a+")
+if fd then
+  -- write 'foo bar' to the end of the file
+  fd:write('foo bar')
+  fd:close()
+end
 ```
 
 #### See also
 - [`file.open()`](#fileopen)
-- [`file.writeline()`](#filewriteline)
+- [`file.writeline()` / `file.obj:writeline()`](#filewriteline-fileobjwriteline)
 
-## file.writeline()
+## file.writeline(), file.obj:writeline()
 
 Write a string to the open file and append '\n' at the end.
 
 #### Syntax
 `file.writeline(string)`
+
+`fd:writeline(string)`
 
 #### Parameters
 `string` content to be write to file
@@ -368,15 +611,16 @@ Write a string to the open file and append '\n' at the end.
 #### Returns
 `true` if write ok, `nil` on error
 
-#### Example
+#### Example (basic model)
 ```lua
 -- open 'init.lua' in 'a+' mode
-file.open("init.lua", "a+")
--- write 'foo bar' to the end of the file
-file.writeline('foo bar')
-file.close()
+if file.open("init.lua", "a+") then
+  -- write 'foo bar' to the end of the file
+  file.writeline('foo bar')
+  file.close()
+end
 ```
 
 #### See also
 - [`file.open()`](#fileopen)
-- [`file.readline()`](#filereadline)
+- [`file.readline()` / `file.obj:readline()`](#filereadline-fileobjreadline)

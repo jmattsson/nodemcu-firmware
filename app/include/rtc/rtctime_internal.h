@@ -396,6 +396,8 @@ static inline void rtc_time_add_sleep_tracking(uint32_t us, uint32_t cycles)
   }
 }
 
+extern void rtc_time_enter_deep_sleep_final(void);
+
 static void rtc_time_enter_deep_sleep_us(uint32_t us)
 {
   if (rtc_time_check_wake_magic())
@@ -437,8 +439,7 @@ static void rtc_time_enter_deep_sleep_us(uint32_t us)
   rtc_reg_write(0x44,32);
   rtc_reg_write(0x10,0);
 
-  rtc_reg_write(0x18,8);
-  rtc_reg_write_and_loop(0x08,0x00100000); //  go to sleep
+  rtc_time_enter_deep_sleep_final();
 }
 
 static inline void rtc_time_deep_sleep_us(uint32_t us)
@@ -654,18 +655,6 @@ static inline void rtc_time_register_bootup(void)
   }
 }
 
-// If a bootloader used time, it needs to restore the sleep magic for the second stage executable
-static inline void rtc_time_revert_register_bootup(void)
-{
-  if (rtc_time_check_magic() && !rtc_time_check_sleep_magic())
-  {
-    // Make sure we are ready for sleep-like timekeeping
-    rtc_time_select_ccount_source(CPU_BOOTUP_MHZ,false);
-    // And note down that we indeed slept soundly...
-    rtc_time_set_sleep_magic();
-  }
-}
-
 // Call this from the nodemcu entry point, i.e. just before we switch from 52MHz to 80MHz
 static inline void rtc_time_switch_clocks(void)
 {
@@ -712,12 +701,14 @@ static inline void rtc_time_gettimeofday(struct rtc_timeval* tv)
   rtc_time_register_time_reached(sec,usec);
 }
 
-static inline void rtc_time_settimeofday_generic(const struct rtc_timeval* tv, bool do_rtc)
+static inline void rtc_time_settimeofday(const struct rtc_timeval* tv)
 {
   if (!rtc_time_check_magic())
     return;
 
 
+  uint32_t sleep_us=rtc_mem_read(RTC_SLEEPTOTALUS_POS);
+  uint32_t sleep_cycles=rtc_mem_read(RTC_SLEEPTOTALCYCLES_POS);
   // At this point, the CPU clock will definitely be at the default rate (nodemcu fully booted)
   uint64_t now_esp_us=rtc_time_get_now_us_adjusted();
   uint64_t now_ntp_us=((uint64_t)tv->tv_sec)*1000000+tv->tv_usec;
@@ -728,28 +719,18 @@ static inline void rtc_time_settimeofday_generic(const struct rtc_timeval* tv, b
   uint64_t sourcecycles=rtc_time_source_offset();
   rtc_mem_write64(RTC_CYCLEOFFSETL_POS,target_unitcycles-sourcecycles);
 
-  uint32_t sleep_us=rtc_mem_read(RTC_SLEEPTOTALUS_POS);
-  if (do_rtc)
+  // calibrate sleep period based on difference between expected time and actual time
+  if (sleep_us>0 && sleep_us<0xffffffff &&
+      sleep_cycles>0 && sleep_cycles<0xffffffff)
   {
-    uint32_t sleep_cycles=rtc_mem_read(RTC_SLEEPTOTALCYCLES_POS);
-    // calibrate sleep period based on difference between expected time and actual time
-    if (sleep_us>0 && sleep_us<0xffffffff &&
-        sleep_cycles>0 && sleep_cycles<0xffffffff)
-    {
-      uint64_t actual_sleep_us=sleep_us-diff_us;
-      uint32_t cali=(actual_sleep_us<<12)/sleep_cycles;
-      if (rtc_time_calibration_is_sane(cali))
-        rtc_mem_write(RTC_CALIBRATION_POS,cali);
-    }
+    uint64_t actual_sleep_us=sleep_us-diff_us;
+    uint32_t cali=(actual_sleep_us<<12)/sleep_cycles;
+    if (rtc_time_calibration_is_sane(cali))
+      rtc_mem_write(RTC_CALIBRATION_POS,cali);
+  }
 
-    rtc_mem_write(RTC_SLEEPTOTALUS_POS,0);
-    rtc_mem_write(RTC_SLEEPTOTALCYCLES_POS,0);
-  }
-  else
-  {
-    sleep_us-=diff_us;
-    rtc_mem_write(RTC_SLEEPTOTALUS_POS,sleep_us);
-  }
+  rtc_mem_write(RTC_SLEEPTOTALUS_POS,0);
+  rtc_mem_write(RTC_SLEEPTOTALCYCLES_POS,0);
 
   // Deal with time adjustment if necessary
   if (diff_us>0) // Time went backwards. Avoid that....
@@ -765,11 +746,6 @@ static inline void rtc_time_settimeofday_generic(const struct rtc_timeval* tv, b
   uint32_t now_s=now_ntp_us/1000000;
   uint32_t now_us=now_ntp_us%1000000;
   rtc_time_register_time_reached(now_s,now_us);
-}
-
-static inline void rtc_time_settimeofday(const struct rtc_timeval* tv)
-{
-  rtc_time_settimeofday_generic(tv,true);
 }
 
 #endif

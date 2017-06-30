@@ -292,8 +292,9 @@ int luaV_equalval (lua_State *L, const TValue *t1, const TValue *t2) {
     case LUA_TNIL: return 1;
     case LUA_TNUMBER: return luai_numeq(nvalue(t1), nvalue(t2));
     case LUA_TBOOLEAN: return bvalue(t1) == bvalue(t2);  /* true must be 1 !! */
-    case LUA_TLIGHTUSERDATA: 
     case LUA_TROTABLE:
+      return rvalue(t1) == rvalue(t2);
+    case LUA_TLIGHTUSERDATA: 
     case LUA_TLIGHTFUNCTION:
       return pvalue(t1) == pvalue(t2);
     case LUA_TUSERDATA: {
@@ -759,7 +760,6 @@ void luaV_execute (lua_State *L, int nexeccalls) {
         fixedstack(L);
         if (n == 0) {
           n = cast_int(L->top - ra) - 1;
-          L->top = L->ci->top;
         }
         if (c == 0) c = cast_int(*pc++);
         runtime_check(L, ttistable(ra));
@@ -772,6 +772,7 @@ void luaV_execute (lua_State *L, int nexeccalls) {
           setobj2t(L, luaH_setnum(L, h, last--), val);
           luaC_barriert(L, h, val);
         }
+	L->top = L->ci->top;
         unfixedstack(L);
         continue;
       }

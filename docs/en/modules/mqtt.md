@@ -11,21 +11,24 @@ The client adheres to version 3.1.1 of the [MQTT](https://en.wikipedia.org/wiki/
 Creates a MQTT client.
 
 #### Syntax
-`mqtt.Client(clientid, keepalive, username, password[, cleansession])`
+`mqtt.Client(clientid, keepalive[, username, password, cleansession])`
 
 #### Parameters
 - `clientid` client ID
 - `keepalive` keepalive seconds
 - `username` user name
 - `password` user password
-- `cleansession` 0/1 for `false`/`true`
+- `cleansession` 0/1 for `false`/`true`. Default is 1 (`true`).
 
 #### Returns
 MQTT client
 
 #### Example
 ```lua
--- init mqtt client with keepalive timer 120sec
+-- init mqtt client without logins, keepalive timer 120s
+m = mqtt.Client("clientid", 120)
+
+-- init mqtt client with logins, keepalive timer 120sec
 m = mqtt.Client("clientid", 120, "user", "password")
 
 -- setup Last Will and Testament (optional)
@@ -45,18 +48,22 @@ m:on("message", function(client, topic, data)
 end)
 
 -- for TLS: m:connect("192.168.11.118", secure-port, 1)
-m:connect("192.168.11.118", 1883, 0, function(client) print("connected") end, 
-                                     function(client, reason) print("failed reason: "..reason) end)
+m:connect("192.168.11.118", 1883, 0, function(client)
+  print("connected")
+  -- Calling subscribe/publish only makes sense once the connection
+  -- was successfully established. You can do that either here in the
+  -- 'connect' callback or you need to otherwise make sure the
+  -- connection was established (e.g. tracking connection status or in
+  -- m:on("connect", function)).
 
--- Calling subscribe/publish only makes sense once the connection
--- was successfully established. In a real-world application you want
--- move those into the 'connect' callback or make otherwise sure the 
--- connection was established.
-
--- subscribe topic with qos = 0
-m:subscribe("/topic",0, function(client) print("subscribe success") end)
--- publish a message with data = hello, QoS = 0, retain = 0
-m:publish("/topic","hello",0,0, function(client) print("sent") end)
+  -- subscribe topic with qos = 0
+  client:subscribe("/topic", 0, function(client) print("subscribe success") end)
+  -- publish a message with data = hello, QoS = 0, retain = 0
+  client:publish("/topic", "hello", 0, 0, function(client) print("sent") end)
+end,
+function(client, reason)
+  print("failed reason: " .. reason)
+end)
 
 m:close();
 -- you can call m:connect again
@@ -88,13 +95,41 @@ Connects to the broker specified by the given host, port, and secure options.
 #### Parameters
 - `host` host, domain or IP (string)
 - `port` broker port (number), default 1883
-- `secure` 0/1 for `false`/`true`, default 0. [As per #996](https://github.com/nodemcu/nodemcu-firmware/issues/996#issuecomment-178053308) secure connections use **TLS 1.1** with the following cipher suites: `TLS_RSA_WITH_AES_128_CBC_SHA`, `TLS_RSA_WITH_AES_256_CBC_SHA`, `TLS_RSA_WITH_RC4_128_SHA`, and `TLS_RSA_WITH_RC4_128_MD5`. 
-- `autoreconnect` 0/1 for `false`/`true`, default 0
+- `secure` 0/1 for `false`/`true`, default 0. Take note of constraints documented in the [net module](net.md).
+- `autoreconnect` 0/1 for `false`/`true`, default 0. This option is *deprecated*.
 - `function(client)` callback function for when the connection was established
-- `function(client, reason)` callback function for when the connection could not be established
+- `function(client, reason)` callback function for when the connection could not be established. No further callbacks should be called.
 
 #### Returns
 `true` on success, `false` otherwise
+
+#### Notes
+
+Don't use `autoreconnect`. Let me repeat that, don't use `autoreconnect`. You should handle the errors explicitly and appropriately for
+your application. In particular, the default for `cleansession` above is `true`, so all subscriptions are destroyed when the connection
+is lost for any reason.
+
+In order to acheive a consistent connection, handle errors in the error callback. For example:
+
+```
+function handle_mqtt_error(client, reason) 
+  tmr.create():alarm(10 * 1000, tmr.ALARM_SINGLE, do_mqtt_connect)
+end
+
+function do_mqtt_connect()
+  mqtt:connect("server", function(client) print("connected") end, handle_mqtt_error)
+end
+```
+
+In reality, the connected function should do something useful!
+
+This is the description of how the `autoreconnect` functionality may (or may not) work.
+
+> When `autoreconnect` is set, then the connection will be re-established when it breaks. No error indication will be given (but all the
+> subscriptions may be lost if `cleansession` is true). However, if the
+> very first connection fails, then no reconnect attempt is made, and the error is signalled through the callback (if any). The first connection
+> is considered a success if the client connects to a server and gets back a good response packet in response to its MQTT connection request.
+> This implies (for example) that the username and password are correct.
 
 #### Connection failure callback reason codes:
 
@@ -154,7 +189,8 @@ Publishes a message.
 - `message` the message to publish, (buffer or string)
 - `qos` QoS level
 - `retain` retain flag
-- `function(client)` optional callback fired when PUBACK received
+- `function(client)` optional callback fired when PUBACK received.  NOTE: When calling publish() more than once, the last callback function defined will be called for ALL publish commands.
+  
 
 #### Returns
 `true` on success, `false` otherwise
@@ -171,7 +207,7 @@ Subscribes to one or several topics.
 - `topic` a [topic string](http://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices)
 - `qos` QoS subscription level, default 0
 - `table` array of 'topic, qos' pairs to subscribe to
-- `function(client)` optional callback fired when subscription(s) succeeded
+- `function(client)` optional callback fired when subscription(s) succeeded.  NOTE: When calling subscribe() more than once, the last callback function defined will be called for ALL subscribe commands.
 
 #### Returns
 `true` on success, `false` otherwise
@@ -196,7 +232,7 @@ Unsubscribes from one or several topics.
 #### Parameters
 - `topic` a [topic string](http://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices)
 - `table` array of 'topic, anything' pairs to unsubscribe from
-- `function(client)` optional callback fired when unsubscription(s) succeeded
+- `function(client)` optional callback fired when unsubscription(s) succeeded.  NOTE: When calling unsubscribe() more than once, the last callback function defined will be called for ALL unsubscribe commands.
 
 #### Returns
 `true` on success, `false` otherwise

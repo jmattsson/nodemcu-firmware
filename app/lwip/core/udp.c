@@ -152,13 +152,13 @@ udp_input(struct pbuf *p, struct netif *inp)
           pcb = inp->dhcp->pcb;
         }
       }
-    } else if (dest == DHCP_SERVER_PORT) {
-      if (src == DHCP_CLIENT_PORT) {
-        if ( inp->dhcps_pcb != NULL ) {
-          if ((ip_addr_isany(&inp->dhcps_pcb->local_ip) ||
-              ip_addr_cmp(&(inp->dhcps_pcb->local_ip), &current_iphdr_dest))) {
-            pcb = inp->dhcps_pcb;
-          }
+    }
+  } else if (dest == DHCP_SERVER_PORT) {
+    if (src == DHCP_CLIENT_PORT) {
+      if ( inp->dhcps_pcb != NULL ) {
+        if ((ip_addr_isany(&inp->dhcps_pcb->local_ip) ||
+            ip_addr_cmp(&(inp->dhcps_pcb->local_ip), &current_iphdr_dest))) {
+          pcb = inp->dhcps_pcb;
         }
       }
     }
@@ -758,10 +758,6 @@ udp_bind(struct udp_pcb *pcb, ip_addr_t *ipaddr, u16_t port)
 
   /* no port specified? */
   if (port == 0) {
-#ifndef UDP_LOCAL_PORT_RANGE_START
-#define UDP_LOCAL_PORT_RANGE_START 4096
-#define UDP_LOCAL_PORT_RANGE_END   0x7fff
-#endif
     port = UDP_LOCAL_PORT_RANGE_START;
     ipcb = udp_pcbs;
     while ((ipcb != NULL) && (port != UDP_LOCAL_PORT_RANGE_END)) {

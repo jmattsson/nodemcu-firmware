@@ -46,12 +46,16 @@ INCLUDES += -I ../mqtt
 INCLUDES += -I ../u8glib
 INCLUDES += -I ../ucglib
 INCLUDES += -I ../lua
+INCLUDES += -I ../pcm
 INCLUDES += -I ../platform
 INCLUDES += -I ../spiffs
 INCLUDES += -I ../smart
-INCLUDES += -I ../cjson
 INCLUDES += -I ../dhtlib
+INCLUDES += -I ../fatfs
 INCLUDES += -I ../http
+INCLUDES += -I ../sjson
+INCLUDES += -I ../websocket
+INCLUDES += -I ../pm
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 

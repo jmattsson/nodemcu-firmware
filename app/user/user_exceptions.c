@@ -41,6 +41,9 @@
 #define LOAD_STORE_COMPLAIN_LOUDLY_ON_ERROR
 #include "c_stdio.h"
 
+static exception_handler_fn load_store_handler;
+
+
 void load_non_32_wide_handler (struct exception_frame *ef, uint32_t cause)
 {
   /* If this is not EXCCAUSE_LOAD_STORE_ERROR you're doing it wrong! */
@@ -77,9 +80,13 @@ die:
      c_printf("\nerror: instruction %x at %x failed on memory access to %x\n",
        insn, epc1, excvaddr);
 #endif
-    /* Turns out we couldn't fix this, trigger a system break instead
+    /* Turns out we couldn't fix this, so try and chain to the handler
+     * that was set by the SDK. If none then trigger a system break instead
      * and hang if the break doesn't get handled. This is effectively
      * what would happen if the default handler was installed. */
+    if (load_store_handler) {
+      load_store_handler(ef, cause);
+    }
     asm ("break 1, 1");
     while (1) {}
   }
@@ -109,11 +116,14 @@ die:
  * of whether there's a proper handler installed for EXCCAUSE_LOAD_STORE_ERROR,
  * which of course breaks everything if we allow that to go through. As such,
  * we use the linker to wrap that call and stop the SDK from shooting itself in
- * its proverbial foot.
+ * its proverbial foot. We do save the EXCCAUSE_LOAD_STORE_ERROR handler so that
+ * we can chain to it above.
  */
 exception_handler_fn TEXT_SECTION_ATTR
 __wrap__xtos_set_exception_handler (uint32_t cause, exception_handler_fn fn)
 {
   if (cause != EXCCAUSE_LOAD_STORE_ERROR)
     __real__xtos_set_exception_handler (cause, fn);
+  else
+    load_store_handler = fn;
 }

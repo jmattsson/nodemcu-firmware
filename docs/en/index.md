@@ -11,11 +11,11 @@ The NodeMCU programming model is similar to that of [Node.js](https://en.wikiped
 -- a simple HTTP server
 srv = net.createServer(net.TCP)
 srv:listen(80, function(conn)
-	conn:on("receive", function(conn, payload)
+	conn:on("receive", function(sck, payload)
 		print(payload)
-		conn:send("<h1> Hello, NodeMCU.</h1>")
+		sck:send("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<h1> Hello, NodeMCU.</h1>")
 	end)
-	conn:on("sent", function(conn) conn:close() end)
+	conn:on("sent", function(sck) sck:close() end)
 end)
 ```
 ```lua
@@ -44,7 +44,7 @@ print(gpio.read(pin))
 ```
 
 ## Getting Started
-1. [Build the firmeware](build.md) with the modules you need.
+1. [Build the firmware](build.md) with the modules you need.
 1. [Flash the firmware](flash.md) to the chip.
 1. [Upload code](upload.md) to the firmware.
 

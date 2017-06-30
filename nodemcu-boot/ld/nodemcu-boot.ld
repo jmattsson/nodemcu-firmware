@@ -68,4 +68,5 @@ SECTIONS
   call_user_start = boot_main; /* To make "esptool.py elf2image" work */
 }
 
+PROVIDE ( uart_div_modify = 0x400039d8 );
 INCLUDE "eagle.rom.addr.v6.ld"
