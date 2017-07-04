@@ -68,5 +68,13 @@ SECTIONS
   call_user_start = boot_main; /* To make "esptool.py elf2image" work */
 }
 
+/* The ROM doesn't change, so no need to rely on SDK defs here */
 PROVIDE ( uart_div_modify = 0x400039d8 );
-INCLUDE "eagle.rom.addr.v6.ld"
+PROVIDE ( ets_printf = 0x400024cc );
+PROVIDE ( ets_wdt_disable = 0x400030f0 );
+PROVIDE ( ets_wdt_restore = 0x40003158 );
+PROVIDE ( ets_delay_us = 0x40002ecc );
+PROVIDE ( SPIRead = 0x40004b1c );
+PROVIDE ( SPIWrite = 0x40004a4c );
+PROVIDE ( Cache_Read_Disable = 0x400047f0 );
+PROVIDE ( Cache_Read_Enable = 0x40004678 );

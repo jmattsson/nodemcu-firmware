@@ -30,7 +30,6 @@
  *
  * @author Johny Mattsson <jmattsson@dius.com.au>
  */
-#include <eagle_soc.h>
 #include <stdint.h>
 #include <stdbool.h>
 

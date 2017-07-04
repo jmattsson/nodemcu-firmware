@@ -162,11 +162,12 @@ class ELFFile:
         tool_objcopy = "xtensa-lx106-elf-objcopy"
         if os.getenv('XTENSA_CORE')=='lx106':
             tool_objcopy = "xt-objcopy"
-        subprocess.check_call([tool_objcopy, "--only-section", section, "-Obinary", self.name, ".tmp.section"])
-        f = open(".tmp.section", "rb")
+        tmpfile = ".tmp.section." + str(os.getpid())
+        subprocess.check_call([tool_objcopy, "--only-section", section, "-Obinary", self.name, tmpfile])
+        f = open(tmpfile, "rb")
         data = f.read()
         f.close()
-        os.remove(".tmp.section")
+        os.remove(tmpfile)
         return data
 
 

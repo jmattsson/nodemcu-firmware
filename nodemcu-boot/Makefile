@@ -2,18 +2,15 @@
 build: $(addsuffix .bin,$(addprefix bin/nodemcu-boot-, 9600 74880 115200 silent nobaudchange))
 
 CC=xtensa-lx106-elf-cc
-ESPTOOL?=esptool.py
+MKESPIMAGE?=./mkespimage.py
 
-SDKDIR=../sdk/esp_iot_sdk_v2.1.0
+CFLAGS=-std=c99 -Os -Wall -Wextra -mtext-section-literals -fomit-frame-pointer -mlongcalls
 
-CFLAGS=-std=c99 -Os -Wall -Wextra -ffunction-sections -fdata-sections -mtext-section-literals -fomit-frame-pointer -mlongcalls -I$(SDKDIR)/include
-
-LDFLAGS=-nostdlib -T ld/nodemcu-boot.ld -Wl,-EL -Wl,--no-check-sections -static -Wl,--cref -Wl,-Map=$@.map -L$(SDKDIR)/ld
+LDFLAGS=-nostdlib -T ld/nodemcu-boot.ld -Wl,-EL -static -Wl,-Map=$@.map -Wl,--cref
 
 bin/nodemcu-boot-%.bin: obj/nodemcu-boot-%.elf
-	$(ESPTOOL) elf2image -o $(dir $@) $<
-	mv bin/0x00000.bin $@
-	@-rm bin/0x01000.bin
+	$(MKESPIMAGE) elf2image -o "bin/$*-" $<
+	mv "bin/$*-0x00000.bin" $@
 
 .PRECIOUS: obj/nodemcu-boot-%.elf
 obj/nodemcu-boot-%.elf: src/main.c
@@ -28,5 +25,3 @@ obj/nodemcu-boot-silent.elf: src/main.c
 .PHONY: clean
 clean:
 	-rm -f obj/* bin/*
-
-.NOTPARALLEL: # esptool.py can't run in parallel, due to objcopy tmpfile
