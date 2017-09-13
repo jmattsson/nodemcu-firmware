@@ -84,6 +84,8 @@ typedef struct
   bool end_of_data;
 } s4pp_userdata;
 
+static uint16_t max_batch_size = 0; // "use the server setting"
+
 
 #define goto_err_with_msg(L, ...) \
   do { \
@@ -386,7 +388,8 @@ static void progress_work (s4pp_userdata *sud)
           goto_err_with_msg (L, "out of stack");
 
         bool sig = false;
-        if (sud->n_sent >= sud->n_max)
+        if ((sud->n_sent >= sud->n_max) ||
+            (max_batch_size > 0) && (sud->n_sent >= max_batch_size))
           sig = true;
         else
         {
@@ -798,9 +801,20 @@ err:
 }
 
 
+// oldsz = s4pp.batchsize([newsz])
+static int s4pp_do_batchsize (lua_State *L)
+{
+  lua_pushinteger (L, max_batch_size);
+  if (lua_isnumber (L, 1))
+    max_batch_size = lua_tointeger (L, 1);
+  return 1;
+}
+
+
 static const LUA_REG_TYPE s4pp_map[] =
 {
   { LSTRKEY("upload"),        LFUNCVAL(s4pp_do_upload) },
+  { LSTRKEY("batchsize"),     LFUNCVAL(s4pp_do_batchsize) },
   { LSTRKEY("NTFY_TIME"),     LNUMVAL(0) },
   { LSTRKEY("NTFY_FIRMWARE"), LNUMVAL(1) },
   { LSTRKEY("NTFY_FLAGS"),    LNUMVAL(2) },
