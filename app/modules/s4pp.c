@@ -78,6 +78,7 @@ typedef struct
   uint16_t next_seq;
   uint16_t n_max;
   uint16_t n_sent;
+  uint32_t n_committed;
   uint32_t lasttime;
   SHA256_CTX ctx;
   bool end_of_data;
@@ -529,6 +530,8 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
     goto_err_with_msg (sud->L, "commit failed");
   else if (strncmp ("OK:", line, 3) == 0)
   {
+    // again, we don't pipeline, so easy to keep track of n_committed
+    sud->n_committed += sud->n_sent;
     if (sud->end_of_data)
     {
       sud->state = S4PP_DONE;
@@ -636,8 +639,8 @@ static void on_disconnect (void *arg)
   lua_State *L = push_callback (sud);
   if (sud->state == S4PP_DONE)
   {
-    cleanup (sud);
-    lua_call (L, 0, 0);
+    lua_pushnil (L);
+    lua_pushinteger (L, sud->n_committed);
   }
   else
   {
@@ -645,9 +648,10 @@ static void on_disconnect (void *arg)
       lua_rawgeti (L, LUA_REGISTRYINDEX, sud->err_ref);
     else
       lua_pushstring (L, "unexpected disconnect");
-    cleanup (sud);
-    lua_call (L, 1, 0);
+    lua_pushinteger (L, sud->n_committed);
   }
+  cleanup (sud);
+  lua_call (L, 2, 0);
 }
 
 
