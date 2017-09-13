@@ -662,9 +662,10 @@ static void on_reconnect (void *arg, int8_t err)
 {
   s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
   lua_State *L = push_callback (sud);
-  cleanup (sud);
   lua_pushfstring (L, "error: %d", err);
-  lua_call (L, 1, 0);
+  lua_pushinteger (L, sud->n_committed);
+  cleanup (sud);
+  lua_call (L, 2, 0);
 }
 
 
@@ -688,8 +689,9 @@ static void on_dns_found (const char *name, ip_addr_t *ip, void *arg)
   else
     lua_pushliteral (L, "DNS failed: host not found");
 
+  lua_pushinteger (L, sud->n_committed);
   cleanup (sud);
-  lua_call (L, 1, 0);
+  lua_call (L, 2, 0);
 }
 
 static void on_connect(void* arg)
