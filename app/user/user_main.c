@@ -49,15 +49,13 @@ __asm__(
  * by the time it is invoked the irom has not yet been mapped. This naturally
  * also goes for anything the trampoline itself calls.
  */
-void TEXT_SECTION_ATTR user_start_trampoline (void)
+void TEXT_SECTION_ATTR user_start_trampoline (uint32_t bootarg)
 {
    __real__xtos_set_exception_handler (
      EXCCAUSE_LOAD_STORE_ERROR, load_non_32_wide_handler);
 
-#ifdef LUA_USE_MODULES_RTCTIME
-  // Note: Keep this as close to call_user_start() as possible, since it
-  // is where the cpu clock actually gets bumped to 80MHz.
-  rtctime_early_startup ();
+#ifdef LUA_USE_MODULES_OTAUPGRADE
+  otaupgrade_save_booted_slot (bootarg);
 #endif
 
   /* Re-implementation of default init data deployment. The SDK does not
@@ -102,6 +100,19 @@ void TEXT_SECTION_ATTR user_start_trampoline (void)
 
   // revert temporary setting
   flashchip->chip_size = orig_chip_size;
+
+#ifdef LUA_USE_MODULES_RTCTIME
+  // By now the rtctime stuff appears to have grown so much it no longer
+  // can get inlined here like it once was, so have to temporarily switch
+  // on the flash cache to be able to call it where it needs to be called.
+  Cache_Read_Enable (0, 0, 1);
+
+  // Note: Keep this as close to call_user_start() as possible, since it
+  // is where the cpu clock actually gets bumped to 80MHz.
+  rtctime_early_startup ();
+
+  Cache_Read_Disable ();
+#endif
 
   call_user_start ();
 }
