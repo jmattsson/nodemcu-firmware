@@ -15,6 +15,8 @@
 #include "../crypto/digests.h"
 #include "strbuffer.h"
 
+#include <stdio.h>
+
 #define PAYLOAD_LIMIT 1400
 
 #define lstrbuffer_append(x,...) do { if (!strbuffer_append(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
@@ -304,6 +306,8 @@ static void prepare_dict (s4pp_userdata *sud)
   lua_settable (L, -3);
   lua_pop (L, 1); // drop dict from stack
 
+  // TODO: optimise this into a c_sprintf() like prepare_data?
+
   lua_pushliteral (L, "DICT:");
   lua_pushinteger (L, idx);
   lua_pushliteral (L, ",");
@@ -327,33 +331,32 @@ static bool prepare_data (s4pp_userdata *sud, int idx)
 {
   lua_State *L = sud->L;
   int sample_table = lua_gettop (L);
-  lua_checkstack (L, 6);
+  lua_checkstack (L, 2);
 
   lua_getfield (L, sample_table, "time");
   if (!lua_isnumber (L, -1))
     goto failed;
+
   uint32_t timestamp = lua_tonumber (L, -1);
   int delta_t = timestamp - sud->lasttime;
   sud->lasttime = timestamp;
   lua_pop (L, 1);
 
-  lua_pushinteger (L, idx);
-  lua_pushliteral (L, ",");
-  lua_pushinteger (L, delta_t);
-  lua_pushliteral (L, ",");
   lua_getfield (L, sample_table, "value");
   if (!lua_isnumber (L, -1))
     goto failed;
-  lua_pushliteral (L, "\n");
+  const char *val = lua_tostring (L, -1);
 
-  lua_concat (L, 6);
-  size_t len;
-  const char *str = lua_tolstring (L, -1, &len);
-
-  lstrbuffer_append (sud->buffer, str, len);
+  char tmp[55]; // TODO: verify sensibility of this size
+  int n = c_sprintf (tmp, "%u,%u,%s\n", idx, delta_t, val);
   lua_pop (L, 1);
 
+  if (n < 0 || n >= sizeof(tmp))
+    goto failed;
+
+  lstrbuffer_append (sud->buffer, tmp, n);
   return true;
+
 failed:
   lua_settop (L, sample_table);
   return false;
