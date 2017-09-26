@@ -18,6 +18,7 @@
 #include <stdio.h>
 
 #define PAYLOAD_LIMIT 1400
+#define MAX_IN_FLIGHT 2
 
 #define lstrbuffer_append(x,...) do { if (!strbuffer_append(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
 #define lstrbuffer_add(x,...) do { if (!strbuffer_add(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
@@ -79,11 +80,19 @@ typedef struct
   int next_idx;
   uint16_t next_seq;
   uint16_t n_max;
-  uint16_t n_sent;
+  uint16_t n_used;
   uint32_t n_committed;
   uint32_t lasttime;
   SHA256_CTX ctx;
   bool end_of_data;
+  bool all_data_sent; // May not be necessary?
+
+  bool buffer_full;
+  bool buffer_has_sig;
+  bool buffer_need_seq;
+
+  int  buffer_send_active;
+  int  buffer_written_active;
 } s4pp_userdata;
 
 static uint16_t max_batch_size = 0; // "use the server setting"
@@ -247,7 +256,8 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
   lua_pop (L, 1);
   if (err)
     goto_err_with_msg (sud->L, "auth send failed: %d", err);
-
+  sud->buffer_send_active++;
+  sud->buffer_written_active++;
   sud->state = S4PP_AUTHED;
   prepare_seq_hmac (sud);
 
@@ -362,97 +372,120 @@ failed:
   return false;
 }
 
-
 static void progress_work (s4pp_userdata *sud)
 {
   lua_State *L = sud->L;
+
   switch (sud->state)
   {
     case S4PP_AUTHED:
     {
-      lstrbuffer_add (sud->buffer, "SEQ:%u,0,1,0\n", sud->next_seq++); // seq:N time:0 timediv:1 datafmt:0
       sud->next_idx = 0;
-      sud->n_sent = 0;
+      sud->n_used = 0;
       sud->lasttime = 0;
       luaL_unref (L, LUA_REGISTRYINDEX, sud->dict_ref);
       lua_newtable (L);
       sud->dict_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+      sud->buffer_need_seq = true;
       sud->state = S4PP_BUFFERING;
       // fall through
     }
     case S4PP_BUFFERING:
     {
-      size_t sz_estimate;
-      while (strbuffer_str (sud->buffer, &sz_estimate) &&
-             sz_estimate < PAYLOAD_LIMIT &&
-             sud->state == S4PP_BUFFERING)
+      if (!sud->buffer_full)
       {
-        if (!lua_checkstack (L, 1))
-          goto_err_with_msg (L, "out of stack");
+        if (sud->buffer_need_seq)
+          lstrbuffer_add (sud->buffer, "SEQ:%u,0,1,0\n", sud->next_seq++); // seq:N time:0 timediv:1 datafmt:0
+        sud->buffer_need_seq = false;
 
+        lua_State *L = sud->L;
+        size_t sz_estimate;
         bool sig = false;
-        if ((sud->n_sent >= sud->n_max) ||
-            (max_batch_size > 0) && (sud->n_sent >= max_batch_size))
-          sig = true;
-        else
+        while (strbuffer_str (sud->buffer, &sz_estimate) &&
+               sz_estimate < PAYLOAD_LIMIT &&
+               !sig)
         {
-          if (sud->work_ref != LUA_NOREF) // did dict last, now do data
+          if (!lua_checkstack (L, 1))
+            goto_err_with_msg (L, "out of stack");
+
+          if ((sud->n_used >= sud->n_max) ||
+              (max_batch_size > 0) && (sud->n_used >= max_batch_size))
+            sig = true;
+          else
           {
-            lua_rawgeti (L, LUA_REGISTRYINDEX, sud->work_ref);
-            luaL_unref (L, LUA_REGISTRYINDEX, sud->work_ref);
-            sud->work_ref = LUA_NOREF;
-          }
-          else // get the next sample
-          {
-            lua_rawgeti (L, LUA_REGISTRYINDEX, sud->iter_ref);
-            lua_call (L, 0, 1);
-          }
-          if (lua_istable (L, -1))
-          {
-            // send dict and/or data
-            int idx = get_dict_idx (sud);
-            if (idx == -2)
-              goto_err_with_msg (L, "no 'name'");
-            else if (idx == -1)
+            if (sud->work_ref != LUA_NOREF) // did dict last, now do data
             {
-              lua_pushvalue (L, -1); // store "copy" of sample for data round
-              sud->work_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-              prepare_dict (sud);
+              lua_rawgeti (L, LUA_REGISTRYINDEX, sud->work_ref);
+              luaL_unref (L, LUA_REGISTRYINDEX, sud->work_ref);
+              sud->work_ref = LUA_NOREF;
+            }
+            else // get the next sample
+            {
+              lua_rawgeti (L, LUA_REGISTRYINDEX, sud->iter_ref);
+              lua_call (L, 0, 1);
+            }
+            if (lua_istable (L, -1))
+            {
+              // send dict and/or data
+              int idx = get_dict_idx (sud);
+              if (idx == -2)
+                goto_err_with_msg (L, "no 'name'");
+              else if (idx == -1)
+              {
+                lua_pushvalue (L, -1); // store "copy" of sample for data round
+                sud->work_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+                prepare_dict (sud);
+              }
+              else
+              {
+                if (!prepare_data (sud, idx))
+                  goto_err_with_msg (L, "no 'time' or 'value'");
+                ++sud->n_used;
+              }
+              lua_pop (L, 1); // drop table
+            }
+            else if (lua_isnoneornil (L, -1))
+            {
+              sig = true;
+              sud->end_of_data=true;
+              lua_pop (L, 1);
             }
             else
-            {
-              if (!prepare_data (sud, idx))
-                goto_err_with_msg (L, "no 'time' or 'value'");
-              ++sud->n_sent;
-            }
-            lua_pop (L, 1); // drop table
+              goto_err_with_msg (L, "iterator returned garbage");
           }
-          else if (lua_isnoneornil (L, -1))
-          {
-            sig = true;
-            lua_pop (L, 1); // TODO: check if this is ok with noneornil
-            sud->end_of_data = true;
-          }
-          else
-            goto_err_with_msg (L, "iterator returned garbage");
         }
+
+        update_hmac_from_buffer (sud);
         if (sig)
         {
-          update_hmac_from_buffer (sud);
           lstrbuffer_add (sud->buffer, "SIG:");
           append_final_hmac_hex (sud);
           lstrbuffer_add (sud->buffer, "\n");
-          sud->state = S4PP_COMMITTING;
         }
+        sud->buffer_full = true;
+        sud->buffer_has_sig = sig;
       }
-
-      if (sud->state != S4PP_COMMITTING)
-        update_hmac_from_buffer (sud);
-
+      // Try sending the buffer. We know it's full, because it either already was, or we just filled it
       size_t len;
       char *str = strbuffer_str (sud->buffer, &len);
       int res = sud->funcs->send (&sud->conn, str, len);
-      strbuffer_reset (sud->buffer);
+
+      if (res == 0) // Actually did send. Synchronise state, and reset buffer
+      {
+        sud->buffer_send_active++;
+        sud->buffer_written_active++;
+
+        if (sud->buffer_has_sig)
+          sud->state = S4PP_COMMITTING;
+
+        if (sud->end_of_data)
+          sud->all_data_sent = true;
+
+        strbuffer_reset (sud->buffer);
+        sud->buffer_full = false;
+      }
+      if (res == ESPCONN_MAXNUM && sud->buffer_send_active) // That's OK
+        res = 0;
 
       if (res != 0)
         goto_err_with_msg (L, "send failed: %d", res);
@@ -537,8 +570,8 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
   else if (strncmp ("OK:", line, 3) == 0)
   {
     // again, we don't pipeline, so easy to keep track of n_committed
-    sud->n_committed += sud->n_sent;
-    if (sud->end_of_data)
+    sud->n_committed += sud->n_used;
+    if (sud->all_data_sent)
     {
       sud->state = S4PP_DONE;
       sud->funcs->disconnect (&sud->conn);
@@ -632,10 +665,26 @@ err:
 }
 
 
+static void maybe_progress_work(s4pp_userdata *sud)
+{
+  if (sud->buffer_written_active == 0 &&
+      sud->buffer_send_active < MAX_IN_FLIGHT)
+    progress_work (sud);
+}
+
+
+static void on_written (void *arg)
+{
+  s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
+  sud->buffer_written_active--;
+  maybe_progress_work (sud);
+}
+
 static void on_sent (void *arg)
 {
   s4pp_userdata *sud = ((struct espconn *)arg)->reverse;
-  progress_work (sud);
+  sud->buffer_send_active--;
+  maybe_progress_work (sud);
 }
 
 
@@ -700,7 +749,7 @@ static void on_dns_found (const char *name, ip_addr_t *ip, void *arg)
 static void on_connect(void* arg)
 {
   struct espconn* conn=(struct espconn*)arg;
-  espconn_set_opt(conn,ESPCONN_REUSEADDR);
+  espconn_set_opt(conn,ESPCONN_REUSEADDR|ESPCONN_COPY);
 }
 
 
@@ -759,6 +808,7 @@ static int s4pp_do_upload (lua_State *L)
   espconn_regist_recvcb    (&sud->conn, on_recv);
   espconn_regist_sentcb    (&sud->conn, on_sent);
   espconn_regist_connectcb (&sud->conn, on_connect);
+  espconn_regist_write_finish(&sud->conn, on_written);
 
   lua_getfield (L, 1, "secure");
   if (lua_isnumber (L, -1) && lua_tonumber (L, -1) > 0)
