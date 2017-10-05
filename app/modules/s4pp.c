@@ -358,7 +358,7 @@ static bool prepare_data (s4pp_userdata *sud, int idx)
   const char *val = lua_tostring (L, -1);
 
   char tmp[55]; // TODO: verify sensibility of this size
-  int n = c_sprintf (tmp, "%u,%u,%s\n", idx, delta_t, val);
+  int n = c_sprintf (tmp, "%u,%d,%s\n", idx, delta_t, val);
   lua_pop (L, 1);
 
   if (n < 0 || n >= sizeof(tmp))
