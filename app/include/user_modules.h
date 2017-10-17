@@ -82,8 +82,7 @@
 //#define LUA_USE_MODULES_LOCP
 //#define LUA_USE_MODULES_MACFRAME
 //#define LUA_USE_MODULES_RAW80211
-//#define LUA_USE_MODULES_FLASHFIFO // Note: These use a fixed flash area. Configure appropriately
-#define LUA_USE_MODULES_DIUSFIFO  //       if you are going to use them!
+//#define LUA_USE_MODULES_FLASHFIFO // Note: This uses a fixed flash area. Configure appropriately if you are going to use it!
 #define LUA_USE_MODULES_RTCSAMPLER
 #define LUA_USE_MODULES_INTELLIGENTLI
 #define LUA_USE_MODULES_S4PP
