@@ -140,6 +140,9 @@
 
 #include "fifo.h" // This gets us the sample_t structure
 #include <stdbool.h>
+#include "flashfifo_cfg.h"
+
+#define ESP8266_SECTOR_SIZE SPI_FLASH_SEC_SIZE
 
 typedef struct
 {
@@ -162,14 +165,6 @@ typedef struct
   uint32_t      index;
 } flash_fifo_slot_t;
 
-
-#define ESP8266_SECTOR_SIZE SPI_FLASH_SEC_SIZE
-#ifndef ESP8266_FLASH_FIFO_START
-#define ESP8266_FLASH_FIFO_START 0xa0000
-#endif
-#ifndef ESP8266_FLASH_FIFO_SIZE
-#define ESP8266_FLASH_FIFO_SIZE  0x40000
-#endif
 
 #ifdef UNIT_TEST
 #define FAKE_FLASH
@@ -306,7 +301,6 @@ INTERNAL static inline bool flash_fifo_clear_content(const flash_fifo_t* fifo)
     flash_fifo_erase_all_data_sectors(fifo);
 }
 
-#define FLASH_FIFO_LONGS_PER_READ 8
 INTERNAL static inline bool flash_fifo_get_counter(uint32_t* result, const flash_fifo_t* fifo, uint32_t sector, uint32_t offset)
 {
   uint32_t addr=sector*fifo->sector_size+offset;
