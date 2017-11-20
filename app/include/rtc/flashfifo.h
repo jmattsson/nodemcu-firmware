@@ -298,7 +298,8 @@ INTERNAL static inline bool flash_fifo_clear_content(const flash_fifo_t* fifo)
 {
   return flash_fifo_reset_head_sector_counter(fifo) &&
     flash_fifo_reset_tail_sector_counter(fifo) &&
-    flash_fifo_erase_all_data_sectors(fifo);
+    // flash_fifo_erase_all_data_sectors(fifo);
+    flash_fifo_erase_data_sector(fifo,0); // First sector only. All others will be erased as tail reaches them
 }
 
 INTERNAL static inline bool flash_fifo_get_counter(uint32_t* result, const flash_fifo_t* fifo, uint32_t sector, uint32_t offset)
