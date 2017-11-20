@@ -607,7 +607,7 @@ static void on_recv (void *arg, char *data, uint16_t len)
   if (sud->recv_len)
   {
     char *end = nl ? nl : data + len -1;
-    uint16_t dlen = (end - data);
+    uint16_t dlen = (end - data)+1;
     uint16_t newlen = sud->recv_len + dlen;
     char *p = (char *)xrealloc (sud->recv_buf, newlen);
     if (!p)
