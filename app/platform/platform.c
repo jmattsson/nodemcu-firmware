@@ -52,7 +52,7 @@ static const int uart_bitrates[] = {
     BIT_RATE_1000000,
     BIT_RATE_1843200,
     BIT_RATE_2000000,
-    BIT_RATE_3686400
+    BIT_RATE_3686400,
     BIT_RATE_4000000,
 };
 
