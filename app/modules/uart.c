@@ -114,6 +114,17 @@ static int l_uart_setup( lua_State* L )
   return 1;
 }
 
+static int l_uart_echo( lua_State* L )
+{
+  uint32_t echo = luaL_checkinteger( L, 1 );
+  echo = lua_tointeger(L,6);
+  if(echo!=0)
+    uart0_echo = true;
+  else
+    uart0_echo = false;
+  return 0;
+}
+
 // uart.getconfig(id)
 static int l_uart_getconfig( lua_State* L )
 {
@@ -177,6 +188,7 @@ static int l_uart_write( lua_State* L )
 static const LUA_REG_TYPE uart_map[] =  {
   { LSTRKEY( "setup" ), LFUNCVAL( l_uart_setup ) },
   { LSTRKEY( "getconfig" ), LFUNCVAL( l_uart_getconfig ) },
+  { LSTRKEY( "echo" ), LFUNCVAL( l_uart_echo ) },
   { LSTRKEY( "write" ), LFUNCVAL( l_uart_write ) },
   { LSTRKEY( "on" ),    LFUNCVAL( l_uart_on ) },
   { LSTRKEY( "alt" ),   LFUNCVAL( l_uart_alt ) },
