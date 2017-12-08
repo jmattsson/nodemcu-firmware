@@ -49,8 +49,11 @@ static const int uart_bitrates[] = {
     BIT_RATE_256000,
     BIT_RATE_460800,
     BIT_RATE_921600,
+    BIT_RATE_1000000,
     BIT_RATE_1843200,
+    BIT_RATE_2000000,
     BIT_RATE_3686400
+    BIT_RATE_4000000,
 };
 
 int platform_init()
@@ -371,8 +374,11 @@ uint32_t platform_uart_setup( unsigned id, uint32_t baud, int databits, int pari
     case BIT_RATE_256000:
     case BIT_RATE_460800:
     case BIT_RATE_921600:
+    case BIT_RATE_1000000:
     case BIT_RATE_1843200:
+    case BIT_RATE_2000000:
     case BIT_RATE_3686400:
+    case BIT_RATE_4000000:
       UartDev.baut_rate = baud;
       break;
     default:
