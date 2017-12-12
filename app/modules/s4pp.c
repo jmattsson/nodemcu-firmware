@@ -65,6 +65,7 @@ typedef struct
   int iter_ref;
   int cb_ref;
   int ntfy_ref;
+  int progress_ref;
   int token_ref;
   int dict_ref;
   int err_ref;
@@ -200,6 +201,7 @@ static void cleanup (s4pp_userdata *sud)
 
   luaL_unref (L, LUA_REGISTRYINDEX, sud->cb_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->ntfy_ref);
+  luaL_unref (L, LUA_REGISTRYINDEX, sud->progress_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->token_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->user_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->key_ref);
@@ -223,6 +225,14 @@ static void abort_conn (s4pp_userdata *sud)
   sud->state = S4PP_ERRORED;
   sud->err_ref = luaL_ref (sud->L, LUA_REGISTRYINDEX);
   sud->funcs->disconnect (&sud->conn);
+}
+
+
+static void report_progress (s4pp_userdata *sud)
+{
+  lua_rawgeti (sud->L, LUA_REGISTRYINDEX, sud->progress_ref);
+  lua_pushinteger (sud->L, sud->n_used);
+  lua_call (sud->L, 1, 0);
 }
 
 
@@ -539,15 +549,18 @@ static void progress_work (s4pp_userdata *sud)
 #ifdef LUA_USE_MODULES_FLASHFIFO
             else
             {
+              bool stop = false;
               if ((sud->fifo_pos&511)==511)
               { // Time to extend the global timeout
                 lua_rawgeti (L, LUA_REGISTRYINDEX, sud->iter_ref);
-                lua_pushinteger (L, sud->fifo_pos);
-                lua_call (L, 1, 0);
+                lua_pushinteger (L, sud->n_committed);
+                lua_call (L, 1, 1);
+                stop = lua_isnoneornil(L, -1);
+                lua_pop (L, 1);
               }
 
               sample_t sample;
-              if (flash_fifo_peek_sample(&sample,sud->fifo_pos))
+              if (!stop && flash_fifo_peek_sample(&sample,sud->fifo_pos))
               {
                 int idx=get_dict_index(sud,sample.tag);
                 if (idx<0)
@@ -680,6 +693,12 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
     goto_err_with_msg (sud->L, "commit failed");
   else if (strncmp ("OK:", line, 3) == 0)
   {
+    if (sud->progress_ref != LUA_NOREF)
+      report_progress(sud);
+#ifdef LUA_USE_MODULES_FLASHFIFO
+    flash_fifo_drop_samples (sud->n_used);
+    sud->fifo_pos = 0;
+#endif
     // again, we don't pipeline, so easy to keep track of n_committed
     sud->n_committed += sud->n_used;
     if (sud->all_data_sent)
@@ -868,6 +887,7 @@ static void on_connect(void* arg)
 static int s4pp_do_upload (lua_State *L)
 {
   bool have_ntfy = false;
+  bool have_progress = false;
 
   luaL_checktype(L, 1, LUA_TTABLE);
   luaL_checkanyfunction (L, 2);
@@ -876,6 +896,11 @@ static int s4pp_do_upload (lua_State *L)
   {
     luaL_checkanyfunction (L, 4);
     have_ntfy = true;
+  }
+  if (lua_gettop (L) >= 5)
+  {
+    luaL_checkanyfunction (L, 5);
+    have_progress = true;
   }
 
   const char *err_msg = 0;
@@ -888,8 +913,7 @@ static int s4pp_do_upload (lua_State *L)
   if (!sud->buffer)
     err_out ("no memory");
   sud->L = L;
-  sud->cb_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->dict_ref = LUA_NOREF;
-  // TODO: also support a progress callback for each seq commit?
+  sud->cb_ref = sud->progress_ref = sud->ntfy_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->dict_ref = LUA_NOREF;
 
   lua_getfield (L, 1, "user");
   if (!lua_isstring (L, -1))
@@ -946,6 +970,11 @@ static int s4pp_do_upload (lua_State *L)
   {
     lua_pushvalue (L, 4);
     sud->ntfy_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+  }
+  if (have_progress)
+  {
+    lua_pushvalue (L, 5);
+    sud->progress_ref = luaL_ref (L, LUA_REGISTRYINDEX);
   }
 
   lua_getfield (L, 1, "server");
