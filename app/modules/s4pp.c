@@ -15,6 +15,11 @@
 #include "../crypto/digests.h"
 #include "strbuffer.h"
 
+#ifdef LUA_USE_MODULES_FLASHFIFO
+# include "rtc/flashfifo.h"
+# define MAX_TAGS 64
+#endif
+
 #include <stdio.h>
 
 #define PAYLOAD_LIMIT 1400
@@ -47,6 +52,7 @@ static const esp_funcs_t esp_secure = {
   .send = (send_function_t)espconn_secure_send
 };
 
+
 typedef struct
 {
   lua_State *L;
@@ -61,7 +67,6 @@ typedef struct
   int ntfy_ref;
   int token_ref;
   int dict_ref;
-  int work_ref;
   int err_ref;
 
   enum {
@@ -93,6 +98,16 @@ typedef struct
 
   int  buffer_send_active;
   int  buffer_written_active;
+
+  // technically the "base" is also flashfifo-only, but it saves us a bunch
+  // of ifdefs to leave it in regardless, and the cost is minor enough to
+  // opt for clean code over tightest memory/code
+  char*       base;
+#ifdef LUA_USE_MODULES_FLASHFIFO
+  int         baselen;
+  uint32_t    fifo_pos;
+  uint32_t flashdict[MAX_TAGS];
+#endif
 } s4pp_userdata;
 
 static uint16_t max_batch_size = 0; // "use the server setting"
@@ -190,7 +205,6 @@ static void cleanup (s4pp_userdata *sud)
   luaL_unref (L, LUA_REGISTRYINDEX, sud->key_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->iter_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->dict_ref);
-  luaL_unref (L, LUA_REGISTRYINDEX, sud->work_ref);
   luaL_unref (L, LUA_REGISTRYINDEX, sud->err_ref);
 
   espconn_delete (&sud->conn);
@@ -199,6 +213,7 @@ static void cleanup (s4pp_userdata *sud)
 
   xfree (sud->conn.proto.tcp);
   xfree (sud->recv_buf);
+  xfree (sud->base);
   xfree (sud);
 }
 
@@ -302,8 +317,89 @@ static void get_optional_field (lua_State *L, int table, const char *key, const 
 }
 
 
+#ifdef LUA_USE_MODULES_FLASHFIFO
+static char* my_strdup(const char* in)
+{
+  int len=strlen(in);
+  char* out=xzalloc(len+1);
+  if (out)
+    memcpy(out,in,len+1);
+  return out;
+}
+
+static int get_dict_index(s4pp_userdata *sud, uint32_t tag)
+{
+  for (int i=0;i<sud->next_idx;i++)
+    if (sud->flashdict[i]==tag)
+      return i;
+  if (sud->next_idx>=MAX_TAGS)
+    return -1;
+
+  char buf[20];
+  int len=c_sprintf(buf,"DICT:%u,,1,",sud->next_idx);
+  lstrbuffer_append (sud->buffer, buf, len);
+  lstrbuffer_append (sud->buffer, sud->base, sud->baselen);
+  fifo_tag_to_string(tag,buf);
+  lstrbuffer_append (sud->buffer, buf, strlen(buf));
+  lstrbuffer_append (sud->buffer,"\n",1);
+  sud->flashdict[sud->next_idx]=tag;
+  return sud->next_idx++;
+}
+
+static void add_data(s4pp_userdata* sud, int idx, const sample_t* sample)
+{
+  int32_t dt=sample->timestamp-sud->lasttime;
+  sud->lasttime=sample->timestamp;
+  char buf[40];
+  int len=c_sprintf(buf,"%u,%d,%d.",idx,dt,sample->value);
+
+  if (sample->decimals && sample->value!=0) // No matter how much we shift 0, it's still 0
+  {
+    int dotpos=len-1; // currently in last place of the string
+
+    int shift=sample->decimals;
+    for (int i=0;i<shift;i++)
+    {
+      if (dotpos==len-1 && buf[dotpos-1]=='0') // Trailing zeros after a decimal point
+      {
+        buf[dotpos--]='\0';
+        buf[dotpos]='.';
+        len--;
+      }
+      else if (buf[dotpos-1]==',' || buf[dotpos-1]=='-') // Have run out of digits to shift, so insert 0 after dot
+      {
+        for (int j=len;j>dotpos;j--)
+          buf[j+1]=buf[j];
+        buf[dotpos+1]='0';
+        len++;
+      }
+      else // move digit at dotpos-1 past the dot
+      {
+        buf[dotpos]=buf[dotpos-1];
+        buf[--dotpos]='.';
+      }
+    }
+
+    if (buf[dotpos-1]==',' || buf[dotpos-1]=='-') // Have run out of digits to the left of dot, so insert back a 0
+    {
+      for (int j=len;j>=dotpos;j--)
+        buf[j+1]=buf[j];
+      buf[dotpos]='0';
+      dotpos++;
+      len++;
+    }
+  }
+  if (buf[len-1]=='.') // If we are trailing a dot, get rid of it
+    --len;
+  buf[len++]='\n';
+  buf[len]='\0';
+  lstrbuffer_append (sud->buffer, buf, len);
+}
+#endif
+
+
 // top of stack = { name=..., unit=..., unitdiv=... }
-static void prepare_dict (s4pp_userdata *sud)
+static int prepare_dict (s4pp_userdata *sud)
 {
   lua_State *L = sud->L;
   int sample_table = lua_gettop (L);
@@ -333,6 +429,7 @@ static void prepare_dict (s4pp_userdata *sud)
 
   lstrbuffer_append (sud->buffer, str, len);
   lua_pop (L, 1);
+  return idx;
 }
 
 
@@ -413,45 +510,59 @@ static void progress_work (s4pp_userdata *sud)
             sig = true;
           else
           {
-            if (sud->work_ref != LUA_NOREF) // did dict last, now do data
-            {
-              lua_rawgeti (L, LUA_REGISTRYINDEX, sud->work_ref);
-              luaL_unref (L, LUA_REGISTRYINDEX, sud->work_ref);
-              sud->work_ref = LUA_NOREF;
-            }
-            else // get the next sample
+            if (!sud->base)
             {
               lua_rawgeti (L, LUA_REGISTRYINDEX, sud->iter_ref);
               lua_call (L, 0, 1);
-            }
-            if (lua_istable (L, -1))
-            {
-              // send dict and/or data
-              int idx = get_dict_idx (sud);
-              if (idx == -2)
-                goto_err_with_msg (L, "no 'name'");
-              else if (idx == -1)
+              if (lua_istable (L, -1))
               {
-                lua_pushvalue (L, -1); // store "copy" of sample for data round
-                sud->work_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-                prepare_dict (sud);
-              }
-              else
-              {
+                // send dict and/or data
+                int idx = get_dict_idx (sud);
+                if (idx == -2)
+                  goto_err_with_msg (L, "no 'name'");
+                else if (idx == -1)
+                  idx=prepare_dict (sud);
                 if (!prepare_data (sud, idx))
                   goto_err_with_msg (L, "no 'time' or 'value'");
                 ++sud->n_used;
+                lua_pop (L, 1); // drop table
               }
-              lua_pop (L, 1); // drop table
+              else if (lua_isnoneornil (L, -1))
+              {
+                sig = true;
+                sud->end_of_data=true;
+                lua_pop (L, 1);
+              }
+              else
+                goto_err_with_msg (L, "iterator returned garbage");
             }
-            else if (lua_isnoneornil (L, -1))
-            {
-              sig = true;
-              sud->end_of_data=true;
-              lua_pop (L, 1);
-            }
+#ifdef LUA_USE_MODULES_FLASHFIFO
             else
-              goto_err_with_msg (L, "iterator returned garbage");
+            {
+              if ((sud->fifo_pos&511)==511)
+              { // Time to extend the global timeout
+                lua_rawgeti (L, LUA_REGISTRYINDEX, sud->iter_ref);
+                lua_pushinteger (L, sud->fifo_pos);
+                lua_call (L, 1, 0);
+              }
+
+              sample_t sample;
+              if (flash_fifo_peek_sample(&sample,sud->fifo_pos))
+              {
+                int idx=get_dict_index(sud,sample.tag);
+                if (idx<0)
+                  goto_err_with_msg (L, "dictionary overflowed");
+                add_data(sud,idx,&sample);
+                sud->fifo_pos++;
+                sud->n_used++;
+              }
+              else
+              {
+                sig = true;
+                sud->end_of_data=true;
+              }
+            }
+#endif
           }
         }
 
@@ -777,7 +888,7 @@ static int s4pp_do_upload (lua_State *L)
   if (!sud->buffer)
     err_out ("no memory");
   sud->L = L;
-  sud->cb_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->work_ref = sud->dict_ref = LUA_NOREF;
+  sud->cb_ref = sud->user_ref = sud->key_ref = sud->token_ref = sud->err_ref = sud->dict_ref = LUA_NOREF;
   // TODO: also support a progress callback for each seq commit?
 
   lua_getfield (L, 1, "user");
@@ -789,6 +900,16 @@ static int s4pp_do_upload (lua_State *L)
   if (!lua_isstring (L, -1))
     err_out ("no 'key' cfg");
   sud->key_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+#ifdef LUA_USE_MODULES_FLASHFIFO
+  lua_getfield (L, 1, "flashbase");
+  if (lua_isstring (L, -1))
+  {
+    sud->base=my_strdup(lua_tolstring(L,-1,NULL));
+    sud->baselen=strlen(sud->base);
+  }
+  lua_pop (L, 1);
+#endif
 
   sud->conn.type = ESPCONN_TCP;
   sud->conn.proto.tcp = (esp_tcp *)xzalloc (sizeof (esp_tcp));
@@ -839,6 +960,7 @@ static int s4pp_do_upload (lua_State *L)
     case ESPCONN_INPROGRESS: break;
     default:
      xfree (sud->conn.proto.tcp);
+     xfree (sud->base);
      xfree (sud);
      return luaL_error (L, "DNS lookup error: %d", res);
   }
@@ -850,7 +972,10 @@ static int s4pp_do_upload (lua_State *L)
 
 err:
   if (sud)
+  {
     xfree (sud->conn.proto.tcp);
+    xfree (sud->base);
+  }
   xfree (sud);
   return luaL_error (L, err_msg);
 }
