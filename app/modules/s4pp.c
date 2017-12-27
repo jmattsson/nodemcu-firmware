@@ -13,6 +13,7 @@
 #include "mem.h"
 #include "../crypto/sha2.h"
 #include "../crypto/digests.h"
+#include "../crypto/mech.h"
 #include "strbuffer.h"
 
 #ifdef LUA_USE_MODULES_FLASHFIFO
@@ -24,6 +25,8 @@
 
 #define PAYLOAD_LIMIT 1400
 #define MAX_IN_FLIGHT 2
+
+#define AES_128_BLOCK_SIZE 16
 
 #define lstrbuffer_append(x,...) do { if (!strbuffer_append(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
 #define lstrbuffer_add(x,...) do { if (!strbuffer_add(x,__VA_ARGS__)) luaL_error(sud->L, "no mem"); } while (0)
@@ -92,13 +95,21 @@ typedef struct
   SHA256_CTX ctx;
   bool end_of_data;
   bool all_data_sent; // May not be necessary?
+  bool hide_supported;
+  bool hide_wanted;
+  bool hide_insisted;
 
   bool buffer_full;
   bool buffer_has_sig;
   bool buffer_need_seq;
 
+  int  buffer_salt;
+
   int  buffer_send_active;
   int  buffer_written_active;
+
+  uint8_t session_key[AES_128_BLOCK_SIZE];
+  uint8_t iv_last_block[AES_128_BLOCK_SIZE];
 
   // technically the "base" is also flashfifo-only, but it saves us a bunch
   // of ifdefs to leave it in regardless, and the cost is minor enough to
@@ -161,6 +172,8 @@ static void update_hmac_from_buffer (s4pp_userdata *sud)
 {
   size_t len;
   const char *data = strbuffer_str (sud->buffer, &len);
+  data += sud->buffer_salt;
+  len -= sud->buffer_salt;
   SHA256_Update (&sud->ctx, data, len);
 }
 
@@ -246,6 +259,82 @@ static void prepare_seq_hmac (s4pp_userdata *sud)
 }
 
 
+
+static inline uint8_t decodehexnibble(char h) {
+  if (h >= '0' && h <= '9')
+    return h - '0';
+  if (h >= 'a' && h <= 'f')
+    return h - 'a' + 10;
+  else if (h >= 'A' && h < 'F')
+    return h - 'A' + 10;
+  else
+    return 0;
+}
+
+
+static inline uint8_t decodehexbyte(const char *hex) {
+  return (decodehexnibble(hex[0]) << 4) | decodehexnibble(hex[1]);
+}
+
+
+static void create_session_key (s4pp_userdata *sud, const char *token, uint16_t len)
+{
+  if (len > AES_128_BLOCK_SIZE * 2)
+    len = AES_128_BLOCK_SIZE * 2;
+  if (len & 1)
+    --len; // don't attempt to decode half hex bytes
+
+  uint8_t inbytes[AES_128_BLOCK_SIZE];
+  for (int i = 0; i < AES_128_BLOCK_SIZE; ++i)
+  {
+    if (i < len)
+      inbytes[i] = decodehexbyte(token+i*2);
+    else
+      inbytes[i] = '\n';
+  }
+
+  crypto_op_t enc;
+  memset (&enc, 0, sizeof(enc));
+  lua_rawgeti (sud->L, LUA_REGISTRYINDEX, sud->key_ref);
+  enc.key = lua_tolstring (sud->L, -1, &enc.keylen);
+  enc.data = inbytes;
+  enc.datalen = AES_128_BLOCK_SIZE;
+  enc.out = sud->session_key;
+  enc.outlen = AES_128_BLOCK_SIZE;
+  enc.op = OP_ENCRYPT;
+
+  const crypto_mech_t *mech = crypto_encryption_mech("AES-CBC");
+  if (!mech || mech->block_size != AES_128_BLOCK_SIZE || !mech->run (&enc))
+  {
+    sud->hide_wanted = false;
+    return;
+  }
+
+  lua_pop (sud->L, 1); // release the shared key
+}
+
+
+// already padded
+static void inplace_hide (s4pp_userdata *sud, char *str, uint16_t len)
+{
+  crypto_op_t enc;
+  memset (&enc, 0, sizeof(enc));
+  enc.key = sud->session_key;
+  enc.keylen = AES_128_BLOCK_SIZE;
+  enc.iv = sud->iv_last_block;
+  enc.ivlen = AES_128_BLOCK_SIZE;
+  enc.data = str;
+  enc.datalen = len;
+  enc.out = str;
+  enc.outlen = len;
+  enc.op = OP_ENCRYPT;
+  const crypto_mech_t *mech = crypto_encryption_mech("AES-CBC");
+  bool res = mech->run(&enc);
+  os_memcpy(
+    sud->iv_last_block, str + len - AES_128_BLOCK_SIZE, AES_128_BLOCK_SIZE);
+}
+
+
 static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
 {
   lua_State *L = sud->L;
@@ -274,7 +363,14 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
   lua_pushliteral (L, ",");
   lua_pushlstring (L, digest, sizeof (digest));
   lua_pushliteral (L, "\n");
-  lua_concat (L, 5);
+  int n = 5;
+  if (sud->hide_supported && sud->hide_wanted)
+  {
+    create_session_key (sud, token, len);
+    lua_pushliteral (L, "HIDE:AES-128-CBC\n");
+    ++n;
+  }
+  lua_concat (L, n);
   size_t alen;
   const char *auth = lua_tolstring (L, -1, &alen);
   int err = sud->funcs->send (&sud->conn, (uint8_t *)auth, alen);
@@ -285,6 +381,20 @@ static void handle_auth (s4pp_userdata *sud, char *token, uint16_t len)
   sud->buffer_written_active++;
   sud->state = S4PP_AUTHED;
   prepare_seq_hmac (sud);
+
+  if (sud->hide_supported && sud->hide_wanted)
+  {
+    uint8_t salt[17] = { 0, };
+    int nrnd = (os_random() % 8) + 8;
+    for (int i = 0; i < nrnd; ++i)
+    {
+      while ((salt[i] = (uint8_t)os_random()) == '\n')
+        ;
+    }
+    salt[nrnd++] = '\n';
+    lstrbuffer_append(sud->buffer, salt, nrnd);
+    sud->buffer_salt = nrnd; // don't hmac over this!
+  }
 
   return;
 err:
@@ -592,6 +702,19 @@ static void progress_work (s4pp_userdata *sud)
       // Try sending the buffer. We know it's full, because it either already was, or we just filled it
       size_t len;
       char *str = strbuffer_str (sud->buffer, &len);
+      if (sud->hide_wanted && sud->hide_supported)
+      {
+        int pad = AES_128_BLOCK_SIZE - (len % AES_128_BLOCK_SIZE);
+        if (pad != 0 && pad != AES_128_BLOCK_SIZE)
+        {
+          strbuffer_resize (sud->buffer, len + pad);
+          str = strbuffer_str (sud->buffer, NULL);
+          for (int i = 0; i < pad; ++i)
+            str[len + i] = '\n';
+          len += pad;
+        }
+        inplace_hide (sud, str, len);
+      }
       int res = sud->funcs->send (&sud->conn, str, len);
 
       if (res == 0) // Actually did send. Synchronise state, and reset buffer
@@ -607,6 +730,7 @@ static void progress_work (s4pp_userdata *sud)
 
         strbuffer_reset (sud->buffer);
         sud->buffer_full = false;
+        sud->buffer_salt = 0;
       }
       if (res == ESPCONN_MAXNUM && sud->buffer_send_active) // That's OK
         res = 0;
@@ -663,7 +787,7 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
     goto_err_with_msg (sud->L, "missing newline");
   if (strncmp ("S4PP/", line, 5) == 0)
   {
-    // S4PP/x.y <algos,algo..> <max_samples>
+    // S4PP/x.y <algo,...> <max_samples> [hidealgo,...]
     if (sud->state > S4PP_INIT)
       goto_err_with_msg (sud->L, "unexpected S4pp hello");
 
@@ -676,6 +800,15 @@ static bool handle_line (s4pp_userdata *sud, char *line, uint16_t len)
       sud->n_max = strtol (maxn, NULL, 0);
     if (!sud->n_max)
       goto_err_with_msg (sud->L, "bad hello");
+
+    if (line[5] == '1' && line[7] >= '2') // "hide" support
+    {
+      algos = strchr (maxn + 1, ' ');
+      if (algos && strstr (algos, "AES-128-CBC"))
+        sud->hide_supported = true;
+    }
+    if (sud->hide_insisted && !sud->hide_supported)
+      goto_err_with_msg (sud->L, "server does not support HIDE");
 
     sud->state = S4PP_HELLO;
   }
@@ -956,10 +1089,26 @@ static int s4pp_do_upload (lua_State *L)
   espconn_regist_write_finish(&sud->conn, on_written);
 
   lua_getfield (L, 1, "secure");
-  if (lua_isnumber (L, -1) && lua_tonumber (L, -1) > 0)
+  bool secure = (lua_isnumber (L, -1) && lua_tonumber (L, -1) > 0);
+  if (secure)
     sud->funcs = &esp_secure;
   else
     sud->funcs = &esp_plain;
+  lua_pop (L, 1);
+
+  lua_getfield (L, 1, "hide");
+  if (lua_isnumber (L, -1))
+  {
+    switch (lua_tointeger (L, -1)) {
+      case 0: sud->hide_wanted = false; break;
+      default:
+      case 1: sud->hide_wanted = true; break;
+      case 2: sud->hide_wanted = true;
+              sud->hide_insisted = true; break;
+    }
+  }
+  else
+    sud->hide_wanted = !secure; // only do HIDE if not already on TLS
   lua_pop (L, 1);
 
   lua_pushvalue (L, 2);
