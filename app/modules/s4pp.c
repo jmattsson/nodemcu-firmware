@@ -177,6 +177,11 @@ static void update_hmac_from_buffer (s4pp_userdata *sud)
   SHA256_Update (&sud->ctx, data, len);
 }
 
+static inline void update_hmac_from_pad (s4pp_userdata *sud, const char *pad, size_t len)
+{
+  SHA256_Update (&sud->ctx, pad, len);
+}
+
 static void init_hmac (s4pp_userdata *sud)
 {
   SHA256_Init (&sud->ctx);
@@ -711,6 +716,8 @@ static void progress_work (s4pp_userdata *sud)
           str = strbuffer_str (sud->buffer, NULL);
           for (int i = 0; i < pad; ++i)
             str[len + i] = '\n';
+          if (!sud->buffer_has_sig)
+            update_hmac_from_pad(sud, str + len, pad);
           len += pad;
         }
         inplace_hide (sud, str, len);
