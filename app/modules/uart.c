@@ -116,8 +116,8 @@ static int l_uart_setup( lua_State* L )
 
 static int l_uart_echo( lua_State* L )
 {
-  uint32_t echo = luaL_checkinteger( L, 1 );
-  echo = lua_tointeger(L,6);
+  uint32_t echo = luaL_checkinteger(L, 1);
+  echo = lua_tointeger(L, 1);
   if(echo!=0)
     uart0_echo = true;
   else
