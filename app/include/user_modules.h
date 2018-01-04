@@ -23,15 +23,17 @@
 //#define LUA_USE_MODULES_AM2320
 //#define LUA_USE_MODULES_APA102
 #define LUA_USE_MODULES_BIT
+//#define LUA_USE_MODULES_BLOOM
 //#define LUA_USE_MODULES_BMP085
 //#define LUA_USE_MODULES_BME280
+//#define LUA_USE_MODULES_BME680
 //#define LUA_USE_MODULES_COAP
 //#define LUA_USE_MODULES_CRON
 #define LUA_USE_MODULES_CRYPTO
 //#define LUA_USE_MODULES_DHT
 //#define LUA_USE_MODULES_DS18B20
-#define LUA_USE_MODULES_ENCODER
-//#define LUA_USE_MODULES_ENDUSER_SETUP // USE_DNS in dhcpserver.h needs to be enabled for this module to work.
+//#define LUA_USE_MODULES_ENCODER
+#define LUA_USE_MODULES_ENDUSER_SETUP // USE_DNS in dhcpserver.h needs to be enabled for this module to work.
 #define LUA_USE_MODULES_FILE
 //#define LUA_USE_MODULES_GDBSTUB
 #define LUA_USE_MODULES_GPIO
@@ -54,15 +56,15 @@
 //#define LUA_USE_MODULES_RFSWITCH
 //#define LUA_USE_MODULES_ROTARY
 //#define LUA_USE_MODULES_RTCFIFO
-#define LUA_USE_MODULES_RTCMEM
-#define LUA_USE_MODULES_RTCTIME
+//#define LUA_USE_MODULES_RTCMEM
+//#define LUA_USE_MODULES_RTCTIME
 //#define LUA_USE_MODULES_SI7021
 //#define LUA_USE_MODULES_SIGMA_DELTA
 #define LUA_USE_MODULES_SJSON
 #define LUA_USE_MODULES_SNTP
 //#define LUA_USE_MODULES_SOMFY
 //#define LUA_USE_MODULES_SPI
-//#define LUA_USE_MODULES_STRUCT
+#define LUA_USE_MODULES_STRUCT
 //#define LUA_USE_MODULES_SWITEC
 // #define LUA_USE_MODULES_TCS34725
 //#define LUA_USE_MODULES_TM1829
@@ -78,20 +80,6 @@
 //#define LUA_USE_MODULES_WS2801
 //#define LUA_USE_MODULES_WS2812
 //#define LUA_USE_MODULES_XPT2046
-
-//#define LUA_USE_MODULES_LOCP
-//#define LUA_USE_MODULES_MACFRAME
-//#define LUA_USE_MODULES_RAW80211
-//#define LUA_USE_MODULES_FLASHFIFO // Note: This uses a fixed flash area. Configure appropriately if you are going to use it!
-#define LUA_USE_MODULES_RTCSAMPLER
-#define LUA_USE_MODULES_INTELLIGENTLI
-#define LUA_USE_MODULES_S4PP
-#define LUA_USE_MODULES_OTAUPGRADE
-#define LUA_USE_MODULES_LIS3MDL
-
-#if defined(LUA_USE_MODULES_SPI) && defined(LUA_USE_MODULES_LIS3MDL)
-#error LIS3MDL and SPI modules cannot be used at the same time
-#endif
 
 #endif  /* LUA_CROSS_COMPILER */
 #endif	/* __USER_MODULES_H__ */

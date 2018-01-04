@@ -98,7 +98,7 @@ extern void luaL_assertfail(const char *file, int line, const char *message);
 #define LUA_PROCESS_LINE_SIG 2
 #define LUA_OPTIMIZE_DEBUG      2
 
-#define ENDUSER_SETUP_AP_SSID "SetupGadget"
+#define ENDUSER_SETUP_AP_SSID "SmartSocket"
 
 /*
  * A valid hostname only contains alphanumeric and hyphen(-) characters, with no hyphens at first or last char
@@ -110,6 +110,9 @@ extern void luaL_assertfail(const char *file, int line, const char *message);
 */
 //#define WIFI_STA_HOSTNAME "NodeMCU"
 //#define WIFI_STA_HOSTNAME_APPEND_MAC
+
+#define WIFI_STA_HOSTNAME "SmartSocket-"
+#define WIFI_STA_HOSTNAME_APPEND_MAC
 
 //#define WIFI_SMART_ENABLE
 
