@@ -38,3 +38,6 @@ CONFIG_BT_ENABLED=n
 # Disable CR/LF translation, for legacy compatibility
 CONFIG_NEWLIB_STDIN_LINE_ENDING_LF=y
 CONFIG_NEWLIB_STDOUT_LINE_ENDING_LF=y
+
+# Stick with Newlib, as libsodium currently breaks with PicolibC
+CONFIG_LIBC_NEWLIB=y
