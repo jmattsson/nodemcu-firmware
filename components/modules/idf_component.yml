@@ -2,13 +2,30 @@
 dependencies:
   ## Required IDF version
   idf:
-    version: '>=5.0.0'
+    version: '>=6.0.0'
   # Component dependencies
-  espressif/dp83848: ^1.0.0
-  espressif/ip101: ^1.0.0
-  espressif/ksz80xx: ^1.0.0
-  espressif/lan87xx: ^1.0.0
   espressif/libsodium: ~1.0.20
   espressif/mdns: ^1.4.2
   espressif/mqtt: ^1.0.0
-  espressif/rtl8201: ^1.0.0
+
+  # Ethernet driver dependencies
+  espressif/dp83848:
+    version: ^1.0.0
+    rules:
+     - if: target in esp32
+  espressif/ip101:
+    version: ^1.0.0
+    rules:
+     - if: target in esp32
+  espressif/ksz80xx:
+    version: ^1.0.0
+    rules:
+     - if: target in esp32
+  espressif/lan87xx:
+    version: ^1.0.0
+    rules:
+     - if: target in esp32
+  espressif/rtl8201:
+    version: ^1.0.1
+    rules:
+     - if: target in esp32
