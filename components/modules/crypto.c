@@ -2,7 +2,7 @@
 #include <string.h>
 #include "lauxlib.h"
 #include "lmem.h"
-#include "mbedtls/md.h"
+#include "psa/crypto.h"
 #include "module.h"
 #include "platform.h"
 
@@ -12,12 +12,16 @@
 typedef struct {
     const char* name;
     const size_t size;
-    const mbedtls_md_type_t type;
+    const psa_algorithm_t algo;
 } algo_info_t;
 
 // hash_context_t contains information about an ongoing hash operation
 typedef struct {
-    mbedtls_md_context_t mbedtls_context;
+    union {
+      psa_hash_operation_t hash_op;
+      psa_mac_operation_t hmac_op;
+    };
+    psa_key_id_t key_id;
     const algo_info_t* ainfo;
     bool hmac_mode;
 } hash_context_t;
@@ -25,13 +29,13 @@ typedef struct {
 // the constant algorithms array below contains a table of functions and other
 // information about each enabled hashing algorithm
 static const algo_info_t algorithms[] = {
-    { "MD5",       16, MBEDTLS_MD_MD5    },
-    { "RIPEMD160", 20, MBEDTLS_MD_RIPEMD160 },
-    { "SHA1",      20, MBEDTLS_MD_SHA1   },
-    { "SHA224",    32, MBEDTLS_MD_SHA224 },
-    { "SHA256",    32, MBEDTLS_MD_SHA256 },
-    { "SHA384",    64, MBEDTLS_MD_SHA384 },
-    { "SHA512",    64, MBEDTLS_MD_SHA512 },
+    { "MD5",       16, PSA_ALG_MD5    },
+    { "RIPEMD160", 20, PSA_ALG_RIPEMD160 },
+    { "SHA1",      20, PSA_ALG_SHA_1   },
+    { "SHA224",    32, PSA_ALG_SHA_224 },
+    { "SHA256",    32, PSA_ALG_SHA_256 },
+    { "SHA384",    64, PSA_ALG_SHA_384 },
+    { "SHA512",    64, PSA_ALG_SHA_512 },
 };
 
 
@@ -70,18 +74,30 @@ static int crypto_new_hash_or_hmac(lua_State* L, bool is_hmac) {
     phctx->ainfo = ainfo;
     phctx->hmac_mode = is_hmac;
 
-    mbedtls_md_init(&phctx->mbedtls_context);
-    int err =
-        mbedtls_md_setup(
-            &phctx->mbedtls_context,
-            mbedtls_md_info_from_type(phctx->ainfo->type),
-            is_hmac);
-    if (phctx->hmac_mode)
-        err |= mbedtls_md_hmac_starts(&phctx->mbedtls_context, key, key_len);
+    psa_status_t res = PSA_SUCCESS;
+    if (is_hmac)
+    {
+      phctx->hmac_op = psa_mac_operation_init();
+
+      psa_key_attributes_t attrs = PSA_KEY_ATTRIBUTES_INIT;
+      psa_set_key_algorithm(&attrs, ainfo->algo);
+      psa_set_key_usage_flags(&attrs, PSA_KEY_USAGE_SIGN_MESSAGE);
+      res = psa_import_key(&attrs, key, key_len, &phctx->key_id);
+      psa_reset_key_attributes(&attrs);
+      if (res != PSA_SUCCESS)
+        return luaL_error(L, "hmac key import failed: %d", res);
+
+      res = psa_mac_sign_setup(&phctx->hmac_op, phctx->key_id, ainfo->algo);
+      if (res != PSA_SUCCESS)
+        return luaL_error(L, "hmac setup failed: %d", res);
+    }
     else
-        err |= mbedtls_md_starts(&phctx->mbedtls_context);
-    if (err != 0)
-        return luaL_error(L, "Error starting context");
+    {
+      phctx->hash_op = psa_hash_operation_init();
+      res = psa_hash_setup(&phctx->hash_op, ainfo->algo);
+      if (res != PSA_SUCCESS)
+        return luaL_error(L, "hash setup failed: %d", res);
+    }
 
     return 1;  // one object returned, the hasher userdata object.
 }
@@ -106,15 +122,15 @@ static int crypto_hash_update(lua_State* L) {
     // retrieve the input string:
     const unsigned char* input = (const unsigned char*)luaL_checklstring(L, 2, &size);
 
-    int err = 0;
+    psa_status_t res = PSA_SUCCESS;
     // call the update hashing function:
     if (phctx->hmac_mode)
-        err = mbedtls_md_hmac_update(&phctx->mbedtls_context, input, size);
+      res = psa_mac_update(&phctx->hmac_op, input, size);
     else
-        err = mbedtls_md_update(&phctx->mbedtls_context, input, size);
+      res = psa_hash_update(&phctx->hash_op, input, size);
 
-    if (err != 0)
-        luaL_error(L, "Error updating hash");
+    if (res != PSA_SUCCESS)
+      return luaL_error(L, "Error updating hash: %d", res);
 
     return 0;  // no return value
 }
@@ -125,20 +141,23 @@ static int crypto_hash_finalize(lua_State* L) {
     // retrieve the hashing context:
     hash_context_t* phctx = (hash_context_t*)luaL_checkudata(L, 1, HASH_METATABLE);
 
+    size_t size = phctx->ainfo->size;
     // reserve some space to retrieve the output hash, according to the current algorithm
-    unsigned char output[phctx->ainfo->size];
+    unsigned char output[size];
 
-    int err = 0;
+    psa_status_t res = PSA_SUCCESS;
     // call the hash finish function to retrieve the result
     if (phctx->hmac_mode)
-      err = mbedtls_md_hmac_finish(&phctx->mbedtls_context, output);
+      res = psa_mac_sign_finish(&phctx->hmac_op, output, size, &size);
     else
-      err = mbedtls_md_finish(&phctx->mbedtls_context, output);
-    if (err != 0)
-        luaL_error(L, "Error finalizing hash");
+      res = psa_hash_finish(&phctx->hash_op, output, size, &size);
+    if (res != PSA_SUCCESS)
+      return luaL_error(L, "Error finalizing hash: %d", res);
+    if (size != phctx->ainfo->size)
+      return luaL_error(L, "Mismatched hash size; got %d expected %d", size, phctx->ainfo->size);
 
     // pack the output into a lua string
-    lua_pushlstring(L, (const char*)output, phctx->ainfo->size);
+    lua_pushlstring(L, (const char*)output, size);
 
     return 1;  // 1 result returned, the hash.
 }
@@ -148,7 +167,16 @@ static int crypto_hash_finalize(lua_State* L) {
 static int crypto_hash_gc(lua_State* L) {
     // retrieve the hashing context:
     hash_context_t* phctx = (hash_context_t*)luaL_checkudata(L, 1, HASH_METATABLE);
-    mbedtls_md_free(&phctx->mbedtls_context);
+
+    if (phctx->hmac_mode)
+    {
+      psa_mac_abort(&phctx->hmac_op);
+      psa_destroy_key(phctx->key_id);
+    }
+    else {
+      psa_hash_abort(&phctx->hash_op);
+    }
+
     return 0;
 }
 
@@ -169,6 +197,9 @@ LROT_END(crypto, NULL, 0)
 // luaopen_crypto is the crypto module initialization function
 int luaopen_crypto(lua_State* L) {
     luaL_rometatable(L, HASH_METATABLE, LROT_TABLEREF(crypto_hasher));  // create metatable for crypto.hash
+
+    if (psa_crypto_init() != PSA_SUCCESS)
+      return luaL_error(L, "mbedtls init failed");
 
     return 0;
 }

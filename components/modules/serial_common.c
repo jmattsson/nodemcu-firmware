@@ -2,6 +2,7 @@
 
 #include "serial_common.h"
 #include "lauxlib.h"
+#include <stdlib.h>
 #include <string.h>
 
 // This is the historical max value

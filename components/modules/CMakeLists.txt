@@ -21,20 +21,20 @@ set(module_srcs
   "heaptrace.c"
   "http.c"
   "httpd.c"
-  "i2c.c"
-  "i2c_hw_master.c"
-  "i2c_hw_slave.c"
-  "ledc.c"
+#  "i2c.c" FIXME driver needs migration
+#  "i2c_hw_master.c" FIXME driver needs migration
+#  "i2c_hw_slave.c" FIXME driver needs migration
+#  "ledc.c" FIXME driver needs migration
   "mdns.c"
   "mqtt.c"
   "net.c"
   "node.c"
   "otaupgrade.c"
-  "ow.c"
+#  "ow.c" FIXME needs platform support
   "pipe.c"
   "rotary_driver.c"
   "rotary.c"
-  "rmt.c"
+#  "rmt.c" FIXME driver needs migration
   "rtcmem.c"
   "qrcodegen.c"
   "serial_common.c"
@@ -49,7 +49,33 @@ set(module_srcs
   "u8g2.c"
   "uart.c"
   "ucg.c"
-  "ws2812.c"
+#  "ws2812.c" FIXME needs platform support
+)
+set(module_component_dependencies
+  "app_update"
+  "base_nodemcu"
+  "bt"
+  "esp_eth"
+  "esp_hal_gpspi"
+  "esp_http_client"
+  "esp_http_server"
+  "esp_hw_support"
+  "esp_stdio"
+  "esp_usb_cdc_rom_console"
+  "fatfs"
+  "libsodium"
+  "lua"
+  "mbedtls"
+  "mqtt"
+  "platform"
+  "qrcodegen"
+  "sdmmc"
+  "spi_flash"
+  "sjson"
+  "soc"
+  "u8g2"
+  "ucg"
+  "vfs"
 )
 
 # Chip specific modules, per module.
@@ -57,24 +83,27 @@ set(module_srcs
 if(IDF_TARGET STREQUAL "esp32")
   list(APPEND module_srcs
     "can.c"
-    "dac.c"
+#    "dac.c" FIXME driver migration needed
     "eth.c"
-    "i2s.c"
-    "pulsecnt.c"
+#    "i2s.c" FIXME driver migration needed
+#    "pulsecnt.c" FIXME driver migration needed
     "sdmmc.c"
-    "touch.c"
+#    "touch.c" FIXME driver migration needed
     ${wifi_modules}
+  )
+  list(APPEND module_component_dependencies
+    "driver_can"
   )
 elseif(IDF_TARGET STREQUAL "esp32s2")
   list(APPEND module_srcs
-    "dac.c"
-    "pulsecnt.c"
+#    "dac.c" FIXME driver migration needed
+#    "pulsecnt.c" FIXME driver migration needed
     ${wifi_modules}
   )
 elseif(IDF_TARGET STREQUAL "esp32s3")
   list(APPEND module_srcs
-    "dac.c"
-    "pulsecnt.c"
+#    "dac.c" FIXME driver migration needed
+#    "pulsecnt.c" FIXME driver migration needed
     "sdmmc.c"
     ${wifi_modules}
   )
@@ -84,8 +113,8 @@ elseif(IDF_TARGET STREQUAL "esp32c3")
   )
 elseif(IDF_TARGET STREQUAL "esp32c6")
   list(APPEND module_srcs
-    "dac.c"
-    "pulsecnt.c"
+#    "dac.c" FIXME driver migration needed
+#    "pulsecnt.c" FIXME driver migration needed
     ${wifi_modules}
   )
 elseif(IDF_TARGET STREQUAL "esp32h2")
@@ -96,30 +125,7 @@ endif()
 idf_component_register(
   SRCS ${module_srcs}
   INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
-  PRIV_REQUIRES
-    "app_update"
-    "base_nodemcu"
-    "bt"
-    "driver_can"
-    "esp_eth"
-    "esp_http_client"
-    "esp_http_server"
-    "esp_hw_support"
-    "esp_vfs_console"
-    "fatfs"
-    "libsodium"
-    "lua"
-    "mbedtls"
-    "mqtt"
-    "platform"
-    "qrcodegen"
-    "sdmmc"
-    "spi_flash"
-    "sjson"
-    "soc"
-    "u8g2"
-    "ucg"
-    "vfs"
+  PRIV_REQUIRES ${module_component_dependencies}
 )
 
 # Match up all the module source files with their corresponding Kconfig

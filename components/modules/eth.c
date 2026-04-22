@@ -8,6 +8,12 @@
 #include "ip_fmt.h"
 #include "common.h"
 
+#include "esp_eth_phy_dp83848.h"
+#include "esp_eth_phy_ip101.h"
+#include "esp_eth_phy_ksz80xx.h"
+#include "esp_eth_phy_lan87xx.h"
+#include "esp_eth_phy_rtl8201.h"
+
 // When this isn't enabled, the esp_eth.h header isn't available
 #if defined(CONFIG_ETH_ENABLED)
 #include "esp_netif.h"

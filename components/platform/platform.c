@@ -1,6 +1,5 @@
 #include "platform.h"
-#include "driver/sigmadelta.h"
-#include "driver/adc.h"
+#include "hal/gpio_types.h"
 #include "driver/uart.h"
 #include "soc/uart_reg.h"
 #include <stdio.h>
@@ -16,7 +15,7 @@
 
 int platform_init (void)
 {
-  platform_ws2812_init();
+//  platform_ws2812_init(); // FIXME reinstate
   return PLATFORM_OK;
 }
 
@@ -409,115 +408,6 @@ int platform_uart_set_wakeup_threshold(unsigned id, unsigned threshold)
 #endif
   esp_err_t err = uart_set_wakeup_threshold(id, threshold);
   return (err == ESP_OK) ? 0 : -1;
-}
-
-// *****************************************************************************
-// Sigma-Delta platform interface
-
-static gpio_num_t platform_sigma_delta_channel2gpio[SIGMADELTA_CHANNEL_MAX];
-
-int platform_sigma_delta_exists( unsigned channel ) {
-  return (channel < SIGMADELTA_CHANNEL_MAX);
-}
-
-uint8_t platform_sigma_delta_setup( uint8_t channel, uint8_t gpio_num )
-{
-#if 0
-  // signal generator can't be stopped this way
-  // stop signal generator
-  if (ESP_OK != sigmadelta_set_prescale( channel, 0 ))
-    return 0;
-#endif
-
-  // note channel to gpio assignment
-  platform_sigma_delta_channel2gpio[channel] = gpio_num;
-
-  return ESP_OK == sigmadelta_set_pin( channel, gpio_num ) ? 1 : 0;
-}
-
-uint8_t platform_sigma_delta_close( uint8_t channel )
-{
-#if 0
-  // Note: signal generator can't be stopped this way
-  // stop signal generator
-  if (ESP_OK != sigmadelta_set_prescale( channel, 0 ))
-    return 0;
-#endif
-
-  gpio_set_level( platform_sigma_delta_channel2gpio[channel], 1 );
-  gpio_config_t cfg;
-  // force pin back to GPIO
-  cfg.intr_type = GPIO_INTR_DISABLE;
-  cfg.mode = GPIO_MODE_OUTPUT;  // essential to switch IO matrix to GPIO
-  cfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  cfg.pull_up_en = GPIO_PULLUP_ENABLE;
-  cfg.pin_bit_mask = 1 << platform_sigma_delta_channel2gpio[channel];
-  if (ESP_OK != gpio_config( &cfg ))
-    return 0;
-
-  // and set it finally to input with pull-up enabled
-  cfg.mode = GPIO_MODE_INPUT;
-
-  return ESP_OK == gpio_config( &cfg ) ? 1 : 0;
-}
-
-#if 0
-// PWM emulation not possible, code kept for future reference
-uint8_t platform_sigma_delta_set_pwmduty( uint8_t channel, uint8_t duty )
-{
-  uint8_t target = 0, prescale = 0;
-
-  target = duty > 128 ? 256 - duty : duty;
-  prescale = target == 0 ? 0 : target-1;
-
-  //freq = 80000 (khz) /256 /duty_target * (prescale+1)
-  if (ESP_OK != sigmadelta_set_prescale( channel, prescale ))
-    return 0;
-  if (ESP_OK != sigmadelta_set_duty( channel, duty-128 ))
-    return 0;
-
-  return 1;
-}
-#endif
-
-uint8_t platform_sigma_delta_set_prescale( uint8_t channel, uint8_t prescale )
-{
-  return ESP_OK == sigmadelta_set_prescale( channel, prescale ) ? 1 : 0;
-}
-
-uint8_t IRAM_ATTR platform_sigma_delta_set_duty( uint8_t channel, int8_t duty )
-{
-  return ESP_OK == sigmadelta_set_duty( channel, duty ) ? 1 : 0;
-}
-// *****************************************************************************
-// ADC
-
-int platform_adc_exists( uint8_t adc ) { return adc < 2 && adc > 0; }
-
-int platform_adc_channel_exists( uint8_t adc, uint8_t channel ) {
-  return (adc == 1 && channel < 8);
-}
-
-uint8_t platform_adc_set_width( uint8_t adc, int bits ) {
-  (void)adc;
-  bits = bits - 9;
-  if (ESP_OK != adc1_config_width( bits ))
-    return 0;
-
-  return 1;
-}
-
-uint8_t platform_adc_setup( uint8_t adc, uint8_t channel, uint8_t atten ) {
-  if (adc == 1 && ESP_OK != adc1_config_channel_atten( channel, atten ))
-    return 0;
-
-  return 1;
-}
-
-int platform_adc_read( uint8_t adc, uint8_t channel ) {
-  int value = -1;
-  if (adc == 1) value = adc1_get_raw( channel );
-  return value;
 }
 
 // *****************************************************************************

@@ -135,7 +135,7 @@ static void on_receive(const esp_now_recv_info_t *info, const uint8_t *data, int
 }
 
 
-static void on_sent(const uint8_t *mac, esp_now_send_status_t status)
+static void on_sent(const esp_now_send_info_t *tx_info, esp_now_send_status_t status)
 {
   sent_packet_t *p = malloc(sizeof(sent_packet_t));
   if (!p)
@@ -143,7 +143,7 @@ static void on_sent(const uint8_t *mac, esp_now_send_status_t status)
     NODE_ERR("out of memory\n");
     return;
   }
-  memcpy(p->dst, mac, sizeof(p->dst));
+  memcpy(p->dst, tx_info->des_addr, sizeof(p->dst));
   p->status = status;
 
   if (!task_post_medium(espnow_task, (task_param_t)p))

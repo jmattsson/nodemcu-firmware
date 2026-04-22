@@ -2,7 +2,13 @@
 dependencies:
   ## Required IDF version
   idf:
-    version: ">=5.0.0"
+    version: '>=5.0.0'
   # Component dependencies
-  espressif/libsodium: "~1.0.20"
-  espressif/mdns: "^1.4.2"
+  espressif/dp83848: ^1.0.0
+  espressif/ip101: ^1.0.0
+  espressif/ksz80xx: ^1.0.0
+  espressif/lan87xx: ^1.0.0
+  espressif/libsodium: ~1.0.20
+  espressif/mdns: ^1.4.2
+  espressif/mqtt: ^1.0.0
+  espressif/rtl8201: ^1.0.0

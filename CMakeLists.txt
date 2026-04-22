@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.22)
 
 if(DEFINED ENV{EXTRA_COMPONENT_DIRS})
   # Turn space-separated, quote-aware environment var into CMake list

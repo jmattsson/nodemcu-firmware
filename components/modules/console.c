@@ -7,14 +7,13 @@
 
 #include "esp_vfs_cdcacm.h"
 #include "driver/uart_vfs.h"
-#include "driver/usb_serial_jtag.h"
-#include "driver/usb_serial_jtag_vfs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <unistd.h>
 
 // Line ending config from Kconfig
 #if CONFIG_NEWLIB_STDIN_LINE_ENDING_CRLF

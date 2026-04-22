@@ -5,15 +5,16 @@
 
 #include "spi_common.h"
 #include "driver/spi_common.h"
+#include "hal/spi_types.h"
 
 
 LROT_BEGIN(lspi, NULL, 0)
   LROT_FUNCENTRY( master, lspi_master )
 //  LROT_FUNCENTRY( slave,  lspi_slave )
 #if defined(CONFIG_IDF_TARGET_ESP32)
-  LROT_NUMENTRY( SPI,    SPI_HOST )
-  LROT_NUMENTRY( HSPI,   HSPI_HOST )
-  LROT_NUMENTRY( VSPI,   VSPI_HOST )
+  LROT_NUMENTRY( SPI,    SPI1_HOST )
+  LROT_NUMENTRY( HSPI,   SPI2_HOST )
+  LROT_NUMENTRY( VSPI,   SPI3_HOST )
 #endif
   LROT_NUMENTRY( SPI1,   SPI1_HOST )
   LROT_NUMENTRY( SPI2,   SPI2_HOST )

@@ -11,6 +11,7 @@
 #include "driver/sdmmc_host.h"
 #include "sdmmc_cmd.h"
 #include "driver/sdspi_host.h"
+#include "hal/spi_types.h"
 
 #include "common.h"
 #include "platform.h"
@@ -21,10 +22,6 @@ sdmmc_card_t *lsdmmc_card[NUM_CARDS];
 
 // local definition for SDSPI host
 #define LSDMMC_HOST_SDSPI 100
-#ifdef CONFIG_IDF_TARGET_ESP32
-#define LSDMMC_HOST_HSPI (LSDMMC_HOST_SDSPI + HSPI_HOST)
-#define LSDMMC_HOST_VSPI (LSDMMC_HOST_SDSPI + VSPI_HOST)
-#endif
 #define LSDMMC_HOST_SPI2 (LSDMMC_HOST_SDSPI + SPI2_HOST)
 #define LSDMMC_HOST_SPI3 (LSDMMC_HOST_SDSPI + SPI3_HOST)
 
@@ -101,9 +98,6 @@ static int lsdmmc_init( lua_State *L )
 
   int slot = luaL_checkint( L, ++stack );
   luaL_argcheck( L, slot == SDMMC_HOST_SLOT_0 || slot == SDMMC_HOST_SLOT_1 ||
-#ifdef CONFIG_IDF_TARGET_ESP32
-                    slot == LSDMMC_HOST_HSPI || slot == LSDMMC_HOST_VSPI ||
-#endif
                     slot == LSDMMC_HOST_SPI2 || slot == LSDMMC_HOST_SPI3,
                  stack, "invalid slot" );
 
@@ -417,8 +411,8 @@ LROT_BEGIN(sdmmc, NULL, 0)
   LROT_NUMENTRY(  HS1,   SDMMC_HOST_SLOT_0 )
   LROT_NUMENTRY(  HS2,   SDMMC_HOST_SLOT_1 )
 #ifdef CONFIG_IDF_TARGET_ESP32
-  LROT_NUMENTRY(  HSPI,  LSDMMC_HOST_HSPI )
-  LROT_NUMENTRY(  VSPI,  LSDMMC_HOST_VSPI )
+  LROT_NUMENTRY(  HSPI,  LSDMMC_HOST_SPI2 )
+  LROT_NUMENTRY(  VSPI,  LSDMMC_HOST_SPI3 )
 #endif
   LROT_NUMENTRY(  SPI2,  LSDMMC_HOST_SPI2 )
   LROT_NUMENTRY(  SPI3,  LSDMMC_HOST_SPI3 )
