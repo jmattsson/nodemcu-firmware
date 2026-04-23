@@ -3,12 +3,12 @@ idf_component_register(
   INCLUDE_DIRS "include"
   REQUIRES "lua"
   PRIV_REQUIRES
-    "nvs_flash"
-    "spiffs"
-    "esp_netif"
     "driver"
-    "vfs"
+    "esp_netif"
     "esp_stdio"
     "esp_usb_cdc_rom_console"
+    "nvs_flash"
+    "spiffs"
+    "vfs"
   LDFRAGMENTS "nodemcu.lf"
 )

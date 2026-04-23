@@ -1,6 +1,5 @@
 idf_component_register(
   SRCS
-#    "adc.c" FIXME needs driver migration
 #    "dht.c" FIXME needs driver migration
 #    "onewire.c" FIXME needs driver migration
     "platform.c"
@@ -15,9 +14,6 @@ idf_component_register(
   INCLUDE_DIRS "include"
   REQUIRES
     "driver"
-    "driver_i2c"
-    "esp_driver_gpio"
-    "esp_driver_spi"
     "esp_driver_uart"
     "spi_flash"
     "spiffs"
@@ -26,6 +22,10 @@ idf_component_register(
     "ucg"
   PRIV_REQUIRES
     "bootloader_support"
+    "driver_i2c"
+    "esp_adc"
+    "esp_driver_gpio"
+    "esp_driver_spi"
     "esp_hal_gpio"
     "esp_rom"
     "lua"

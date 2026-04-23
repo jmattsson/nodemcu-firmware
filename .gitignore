@@ -26,5 +26,7 @@ dependencies.lock
 .idea
 *.iml
 
+.*.swp
+
 #ignore temp file for build infos
 buildinfo.h
