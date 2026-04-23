@@ -55,6 +55,7 @@ set(module_component_dependencies
   "app_update"
   "base_nodemcu"
   "bt"
+  "esp_driver_usb_serial_jtag"
   "esp_eth"
   "esp_hal_gpspi"
   "esp_http_client"

@@ -7,6 +7,8 @@
 
 #include "esp_vfs_cdcacm.h"
 #include "driver/uart_vfs.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
