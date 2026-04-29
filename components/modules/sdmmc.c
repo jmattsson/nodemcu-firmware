@@ -51,8 +51,12 @@ static esp_err_t sdmmc_mount_fat(lsdmmc_ud_t *ud, const char *base_path)
   ff_diskio_register_sdmmc(ud->pdrv, ud->card);
 
   char drv[3] = { (char)('0' + ud->pdrv), ':', 0 };
-  err = esp_vfs_fat_register(
-    base_path, drv, CONFIG_NODEMCU_MAX_OPEN_FILES, &ud->fs);
+  esp_vfs_fat_conf_t cfg = {
+    .base_path = base_path,
+    .fat_drive = drv,
+    .max_files = CONFIG_NODEMCU_MAX_OPEN_FILES,
+  };
+  err = esp_vfs_fat_register(&cfg, &ud->fs);
   if (err != ESP_OK)
     goto fail;
 
