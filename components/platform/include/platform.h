@@ -10,6 +10,26 @@
 
 #include "esp_task.h"
 
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//
+// The "platform" component is largely considered deprecated.
+//
+// It is a holdover from the 8266 days, when we thought we could support
+// multiple different chip types through an abstraction interface on top
+// of bare silicon. On the esp32 range, the IDF itself fills this role, and
+// fighting against it and its direction is futile with the resources we
+// have available in this project.
+//
+// I don't see anything beyond the UART as being able to survive, and that
+// only because of the extensive effort that has gone into continously
+// adapting it to the IDF changes, including the creation of the new
+// "console" module.
+//
+// Resource sharing/management via this module is generally not needed any
+// longer, as the IDF drivers now provide this feature directly.
+//
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 #define PLATFORM_ALIGNMENT __attribute__((aligned(4)))
 #define PLATFORM_ALIGNMENT_PACKED __attribute__((aligned(4),packed))
@@ -154,31 +174,6 @@ int platform_i2c_send_byte( unsigned id, uint8_t data, int ack_check_en );
 // ack_val: 1 = send ACK, 0 = send NACK
 int platform_i2c_recv_byte( unsigned id, int ack_val );
 
-
-// *****************************************************************************
-// Onewire platform interface
-
-typedef struct {
-  unsigned char ROM_NO[8];
-  uint8_t LastDiscrepancy;
-  uint8_t LastFamilyDiscrepancy;
-  uint8_t LastDeviceFlag;
-  uint8_t power;
-} platform_onewire_bus_t;
-
-int platform_onewire_init( uint8_t gpio_num );
-int platform_onewire_reset( uint8_t gpio_num, uint8_t *presence );
-int platform_onewire_write_bytes( uint8_t gpio_num, const uint8_t *buf, uint16_t count, bool power );
-int platform_onewire_depower( uint8_t gpio_num );
-int platform_onewire_read_bytes( uint8_t gpio_num, uint8_t *buf, uint16_t count );
-int platform_onewire_depower( uint8_t gpio_num );
-void platform_onewire_reset_search( platform_onewire_bus_t *bus );
-void platform_onewire_target_search( uint8_t family_code, platform_onewire_bus_t *bus );
-uint8_t platform_onewire_search( uint8_t pin, uint8_t *newAddr, platform_onewire_bus_t *bus );
-uint8_t platform_onewire_crc8( const uint8_t *addr, uint8_t len );
-uint8_t platform_onewire_crc8( const uint8_t *addr, uint8_t len );
-bool platform_onewire_check_crc16( const uint8_t* input, uint16_t len, const uint8_t* inverted_crc, uint16_t crc );
-uint16_t platform_onewire_crc16( const uint8_t* input, uint16_t len, uint16_t crc );
 
 // *****************************************************************************
 // DHT platform interface

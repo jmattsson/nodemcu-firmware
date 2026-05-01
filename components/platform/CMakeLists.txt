@@ -1,7 +1,6 @@
 idf_component_register(
   SRCS
 #    "dht.c" FIXME needs driver migration
-#    "onewire.c" FIXME needs driver migration
     "platform.c"
     "platform_flash.c"
     "platform_partition.c"

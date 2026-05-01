@@ -30,7 +30,6 @@ set(module_srcs
   "net.c"
   "node.c"
   "otaupgrade.c"
-#  "ow.c" FIXME needs platform support
   "pipe.c"
   "rotary_driver.c"
   "rotary.c"

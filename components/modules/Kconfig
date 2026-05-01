@@ -202,12 +202,6 @@ menu "NodeMCU modules"
         help
             Includes the node module (recommended).
 
-    config NODEMCU_CMODULE_OW
-        bool "1-Wire module"
-        default "y"
-        help
-            Includes the 1-Wire (ow) module (recommended).
-
     config NODEMCU_CMODULE_OTAUPGRADE
         bool "Over-The-Air upgrade module"
         default "n"
